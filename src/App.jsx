@@ -6,6 +6,7 @@ import {
   doc,
   setDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   writeBatch,
   increment
@@ -32,7 +33,9 @@ import {
   AlertTriangle,
   Database,
   Search,
-  LogOut
+  LogOut,
+  UserCheck,
+  Filter
 } from 'lucide-react';
 
 // Configuración oficial de tu proyecto Firebase
@@ -51,11 +54,19 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
-// Correos autorizados de tu equipo (proveedor Google)
-const ALLOWED_EMAILS = [
+// Únicos correos con permisos de edición, precios, valor de stock y pedidos
+const ADMIN_EMAILS = [
   'contacto@la-pajarita.com.mx',
   'eduardo@la-pajarita.com.mx'
 ];
+
+// Helper para convertir links de Drive en URL directa que nunca se rompe en <img>
+const toDirectDriveImg = (url) => {
+  if (!url) return '';
+  const match = url.match(/\/d\/([^/]+)|id=([^&]+)/);
+  const fileId = match ? (match[1] || match[2]) : null;
+  return fileId ? `https://lh3.googleusercontent.com/d/${fileId}` : url;
+};
 
 // Catálogo inicial migrado de tu inventario (39 SKUs)
 const INITIAL_INVENTORY = [
@@ -105,77 +116,124 @@ const INITIAL_CLIENTS = [
   { id: 'cliente-directo', nombre: 'Cliente Directo General', tipo: 'Cliente Directo', descuento: 0, contacto: 'Mostrador', telefono: '', correo: '', rfc: 'XAXX010101000', direccion: 'Ciudad de México' }
 ];
 
-const EJECUTIVOS = [
-  { nombre: 'Marijose Arroyo', firmaUrl: 'https://drive.google.com/uc?export=view&id=1_mbd7kdot6xUltJlgl' },
-  { nombre: 'Ileana Fernández', firmaUrl: 'https://drive.google.com/uc?export=view&id=1dl9HESwsIIwdPfzjH2' },
-  { nombre: 'Mariana De Garay', firmaUrl: 'https://drive.google.com/uc?export=view&id=1ecJFWUAK5t_-QaX-bK' },
-  { nombre: 'Erika Vázquez', firmaUrl: 'https://drive.google.com/uc?export=view&id=1Bwfo0dsNOmHJkf4zxH' },
-  { nombre: 'Eduardo Casahonda', firmaUrl: 'https://drive.google.com/uc?export=view&id=1li4VNnYpF18R7fRDum' }
+const INITIAL_EJECUTIVOS = [
+  { id: 'marijose', nombre: 'Marijose Arroyo', puesto: 'Ventas', telefono: '+52 55 5454 0090', correo: 'marijose@la-pajarita.com.mx', firmaUrl: 'https://drive.google.com/file/d/1_mbd7kdot6xUltJlgl/view' },
+  { id: 'ileana', nombre: 'Ileana Fernández', puesto: 'Operaciones y Ventas', telefono: '+52 55 5454 0090', correo: 'ileana@la-pajarita.com.mx', firmaUrl: 'https://drive.google.com/file/d/1dl9HESwsIIwdPfzjH2/view' },
+  { id: 'mariana', nombre: 'Mariana De Garay', puesto: 'Ventas', telefono: '+52 55 5454 0090', correo: 'mariana@la-pajarita.com.mx', firmaUrl: 'https://drive.google.com/file/d/1ecJFWUAK5t_-QaX-bK/view' },
+  { id: 'erika', nombre: 'Erika Vázquez', puesto: 'Ventas', telefono: '+52 55 5454 0090', correo: 'erika@la-pajarita.com.mx', firmaUrl: 'https://drive.google.com/file/d/1Bwfo0dsNOmHJkf4zxH/view' },
+  { id: 'eduardo', nombre: 'Eduardo Casahonda', puesto: 'Dirección Comercial', telefono: '+52 55 5454 0090', correo: 'eduardo@la-pajarita.com.mx', firmaUrl: 'https://drive.google.com/file/d/1li4VNnYpF18R7fRDum/view' }
 ];
 
 const MODALIDADES_IMPRESION = [
-  { id: 'sin', label: 'Sin impresión' },
-  { id: '1tinta', label: '1 Tinta (+25%)' },
-  { id: '2tintas', label: '2 Tintas (+30%)' },
-  { id: '1tintamx', label: '1 Tinta México (+$0.70/paq)' },
-  { id: '2tintasmx', label: '2 Tintas México (+$1.00/paq)' }
+  { id: 'sin', label: 'Sin impresión', short: 'Sin impresión' },
+  { id: '1tinta', label: '1 Tinta (+25%)', short: '1 Tinta' },
+  { id: '2tintas', label: '2 Tintas (+30%)', short: '2 Tintas' },
+  { id: '1tintamx', label: '1 Tinta México (+$0.70/paq)', short: '1 Tinta MX' },
+  { id: '2tintasmx', label: '2 Tintas México (+$1.00/paq)', short: '2 Tintas MX' }
 ];
 
-const formatCurrency = (val) =>
-  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(val) || 0);
+const TAMANOS_FILTER = ['Todos', '20x20', '25x25', '25x35', '30x40', '33x33', '40x20', '40x32', '100x100'];
+const MATERIALES_FILTER = ['Todos', 'Airlaid', 'Novotela', 'Drylace', 'Punta-Punta', 'Micropunto', 'Go Green'];
+
+const DEFAULT_NOTAS = `Contamos con inventario en México de las servilletas cotizadas.
+Pedidos mínimos de 1 caja.
+*ESTOS PRECIOS NO INCLUYEN IVA, PODRÁN VARIAR SEGÚN TIPO DE CAMBIO Y VOLUMEN
+Precios más IVA.
+TIEMPO DE ENTREGA: Por Definir.
+POLÍTICA DE COMPRA: 50% Anticipo
+ENVÍOS: Entrega en CDMX sin costo, una sola ubicación en pedidos mayores a 10 cajas. Entrega de paquetes en cajas cerradas.
+No incluye ningún tipo de personalización no especificada.
+Cotización válida por 15 días hábiles.
+La existencias para entrega inmediata pueden variar.`;
+
+const formatCurrency = (val, decimals = 2) =>
+  new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  }).format(Number(val) || 0);
+
+// Funciones auxiliares para extraer tamaño y material automáticamente
+const extractSize = (sku, desc) => {
+  const text = `${sku} ${desc}`.toLowerCase();
+  for (const t of TAMANOS_FILTER.slice(1)) {
+    if (text.includes(t)) return t;
+  }
+  return 'Otro';
+};
+
+const extractMaterial = (sku, desc) => {
+  const text = `${sku} ${desc}`.toLowerCase();
+  if (text.includes('airlaid') || sku.toLowerCase().includes('ak') || sku.toLowerCase().includes('ai') || sku.toLowerCase().includes('ago') || sku.toLowerCase().includes('ane')) return 'Airlaid';
+  if (text.includes('novotela')) return 'Novotela';
+  if (text.includes('drylace')) return 'Drylace';
+  if (text.includes('punta-punta') || text.includes('punta')) return 'Punta-Punta';
+  if (text.includes('micropunto')) return 'Micropunto';
+  if (text.includes('go green')) return 'Go Green';
+  return 'Basic / Otro';
+};
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [accessDeniedMsg, setAccessDeniedMsg] = useState('');
   const [activeTab, setActiveTab] = useState('inventario');
+
   const [inventory, setInventory] = useState([]);
   const [clients, setClients] = useState([]);
+  const [ejecutivos, setEjecutivos] = useState(INITIAL_EJECUTIVOS);
   const [orders, setOrders] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [loadingSeed, setLoadingSeed] = useState(false);
 
+  // Filtros globales de búsqueda
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterSize, setFilterSize] = useState('Todos');
+  const [filterMaterial, setFilterMaterial] = useState('Todos');
+
+  // Modales de edición (solo Admin)
   const [newProd, setNewProd] = useState({ sku: '', descripcion: '', stock: 0, costoCaja: 0, uPq: 0, pCaja: 0 });
   const [showProdModal, setShowProdModal] = useState(false);
 
   const [newClient, setNewClient] = useState({ nombre: '', tipo: 'Distribuidor', descuento: 30, contacto: '', telefono: '', correo: '', rfc: '', direccion: '' });
   const [showClientModal, setShowClientModal] = useState(false);
 
+  const [newEjec, setNewEjec] = useState({ nombre: '', puesto: 'Ventas', telefono: '+52 55 5454 0090', correo: '', firmaUrl: '' });
+  const [showEjecModal, setShowEjecModal] = useState(false);
+
+  // Estado Cotizador
   const [cotFolio, setCotFolio] = useState(1001);
   const [cotClientId, setCotClientId] = useState('');
+  const [cotClienteManual, setCotClienteManual] = useState('');
+  const [cotContactoManual, setCotContactoManual] = useState('');
+  const [cotTelefonoManual, setCotTelefonoManual] = useState('');
+  const [cotCorreoManual, setCotCorreoManual] = useState('');
+  const [cotDireccionManual, setCotDireccionManual] = useState('');
   const [cotImpresion, setCotImpresion] = useState('sin');
-  const [cotEjecutivo, setCotEjecutivo] = useState(EJECUTIVOS[0].nombre);
-  const [cotNotas, setCotNotas] = useState('Precios sujetos a cambio sin previo aviso. Tiempo de entrega sujeto a disponibilidad en bodega.');
-  const [cotItems, setCotItems] = useState([{ sku: '', cajas: 1 }]);
+  const [cotEjecutivoId, setCotEjecutivoId] = useState('mariana');
+  const [cotNotas, setCotNotas] = useState(DEFAULT_NOTAS);
+  const [cotItems, setCotItems] = useState([{ sku: '', unidadVenta: 'caja', cantidad: 1 }]);
 
+  // Estado Orden de Pedido (solo Admin)
   const [ordFolio, setOrdFolio] = useState(188);
   const [ordClientId, setOrdClientId] = useState('');
   const [ordRecoge, setOrdRecoge] = useState('NO');
   const [ordEnvio, setOrdEnvio] = useState(0);
-  const [ordEjecutivo, setOrdEjecutivo] = useState(EJECUTIVOS[1].nombre);
+  const [ordEjecutivo, setOrdEjecutivo] = useState('Ileana Fernández');
   const [ordItems, setOrdItems] = useState([{ sku: '', cajas: 1, customDesc: null }]);
 
+  const isAdmin = useMemo(() => {
+    if (!user?.email) return false;
+    return ADMIN_EMAILS.map((e) => e.toLowerCase()).includes(user.email.toLowerCase());
+  }, [user]);
+
   useEffect(() => {
-    return onAuthStateChanged(auth, async (u) => {
-      if (u) {
-        const emailLower = (u.email || '').toLowerCase();
-        const allowedLower = ALLOWED_EMAILS.map((e) => e.toLowerCase());
-        if (!allowedLower.includes(emailLower)) {
-          await signOut(auth);
-          setUser(null);
-          setAccessDeniedMsg(`El correo ${u.email} no está autorizado para usar este sistema.`);
-          setAuthLoading(false);
-          return;
-        }
-        setAccessDeniedMsg('');
-      }
+    return onAuthStateChanged(auth, (u) => {
       setUser(u);
       setAuthLoading(false);
     });
   }, []);
 
   const handleGoogleLogin = async () => {
-    setAccessDeniedMsg('');
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
@@ -197,23 +255,53 @@ export default function App() {
     const unsubCli = onSnapshot(collection(db, 'clientes'), (snap) => {
       setClients(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    const unsubOrd = onSnapshot(collection(db, 'pedidos'), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (b.folio || 0) - (a.folio || 0));
-      setOrders(list);
-      if (list.length > 0) {
-        const maxFolio = Math.max(...list.map((o) => Number(o.folio) || 187));
-        setOrdFolio(maxFolio + 1);
+    const unsubEjec = onSnapshot(collection(db, 'ejecutivos'), (snap) => {
+      if (!snap.empty) {
+        setEjecutivos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       }
     });
+    let unsubOrd = () => {};
+    if (isAdmin) {
+      unsubOrd = onSnapshot(collection(db, 'pedidos'), (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (b.folio || 0) - (a.folio || 0));
+        setOrders(list);
+        if (list.length > 0) {
+          const maxFolio = Math.max(...list.map((o) => Number(o.folio) || 187));
+          setOrdFolio(maxFolio + 1);
+        }
+      });
+    }
     return () => {
       unsubInv();
       unsubCli();
+      unsubEjec();
       unsubOrd();
     };
-  }, [user]);
+  }, [user, isAdmin]);
 
+  // Al seleccionar cliente en Cotizador, autorellena sus datos editables
+  const handleSelectCotClient = (id) => {
+    setCotClientId(id);
+    const found = clients.find((c) => c.id === id);
+    if (found) {
+      setCotClienteManual(found.nombre || '');
+      setCotContactoManual(found.contacto || '');
+      setCotTelefonoManual(found.telefono || '');
+      setCotCorreoManual(found.correo || '');
+      setCotDireccionManual(found.direccion || '');
+    } else {
+      setCotClienteManual('');
+      setCotContactoManual('');
+      setCotTelefonoManual('');
+      setCotCorreoManual('');
+      setCotDireccionManual('');
+    }
+  };
+
+  // Precargar catálogo inicial (solo Admin)
   const seedDatabase = async () => {
+    if (!isAdmin) return;
     setLoadingSeed(true);
     try {
       const batch = writeBatch(db);
@@ -224,8 +312,11 @@ export default function App() {
       INITIAL_CLIENTS.forEach((cli) => {
         batch.set(doc(db, 'clientes', cli.id), cli);
       });
+      INITIAL_EJECUTIVOS.forEach((ej) => {
+        batch.set(doc(db, 'ejecutivos', ej.id), ej);
+      });
       await batch.commit();
-      alert('Catálogo de 39 SKUs y clientes cargados correctamente en Firebase.');
+      alert('Catálogo de 39 SKUs, distribuidores y ejecutivos cargados en Firebase.');
     } catch (e) {
       alert('Error al cargar datos iniciales: ' + e.message);
     } finally {
@@ -234,6 +325,7 @@ export default function App() {
   };
 
   const handleCsvUpload = (e) => {
+    if (!isAdmin) return;
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -257,7 +349,7 @@ export default function App() {
         count++;
       }
       await batch.commit();
-      alert(`Se sincronizaron ${count} productos desde tu CSV de Google Sheets.`);
+      alert(`Se sincronizaron ${count} productos desde tu CSV.`);
     };
     reader.readAsText(file);
   };
@@ -277,13 +369,14 @@ export default function App() {
   };
 
   const adjustStock = async (item, delta) => {
+    if (!isAdmin) return;
     const newStock = Math.max(0, (Number(item.stock) || 0) + delta);
     await updateDoc(doc(db, 'inventario', item.id), { stock: newStock });
   };
 
   const handleSaveProduct = async (e) => {
     e.preventDefault();
-    if (!newProd.sku) return;
+    if (!isAdmin || !newProd.sku) return;
     const safeId = newProd.sku.trim().replace(/\//g, '_');
     await setDoc(doc(db, 'inventario', safeId), {
       ...newProd,
@@ -299,7 +392,7 @@ export default function App() {
 
   const handleSaveClient = async (e) => {
     e.preventDefault();
-    if (!newClient.nombre) return;
+    if (!isAdmin || !newClient.nombre) return;
     const id = newClient.nombre.toLowerCase().replace(/[^a-z0-9]/g, '-');
     await setDoc(doc(db, 'clientes', id), {
       ...newClient,
@@ -309,40 +402,90 @@ export default function App() {
     setShowClientModal(false);
   };
 
+  const handleSaveEjecutivo = async (e) => {
+    e.preventDefault();
+    if (!isAdmin || !newEjec.nombre) return;
+    const id = newEjec.nombre.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    await setDoc(doc(db, 'ejecutivos', id), { id, ...newEjec });
+    setNewEjec({ nombre: '', puesto: 'Ventas', telefono: '+52 55 5454 0090', correo: '', firmaUrl: '' });
+    setShowEjecModal(false);
+  };
+
+  // Filtrado inteligente compartido (SKU, Tamaño, Material)
+  const filteredInventory = useMemo(() => {
+    return inventory.filter((p) => {
+      const matchText =
+        p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
+      const size = extractSize(p.sku, p.descripcion);
+      const mat = extractMaterial(p.sku, p.descripcion);
+      const matchSize = filterSize === 'Todos' || size === filterSize;
+      const matchMat = filterMaterial === 'Todos' || mat.toLowerCase() === filterMaterial.toLowerCase();
+      return matchText && matchSize && matchMat;
+    });
+  }, [inventory, searchTerm, filterSize, filterMaterial]);
+
+  // Cálculos Cotizador: precio normal en tabla y descuento separado en totales
   const selectedCotClient = useMemo(
-    () => clients.find((c) => c.id === cotClientId) || { nombre: 'Público General', descuento: 0, direccion: '', contacto: '', telefono: '' },
+    () => clients.find((c) => c.id === cotClientId) || { descuento: 0 },
     [clients, cotClientId]
   );
 
-  const calcCotPrice = (prod) => {
-    if (!prod) return 0;
-    const desc = (Number(selectedCotClient.descuento) || 0) / 100;
-    const baseConDesc = (Number(prod.costoCaja) || 0) * (1 - desc);
-    const paqPorCaja = Number(prod.pCaja) || 0;
+  const calcLineCotizacion = (prod, unidadVenta, cantidad) => {
+    if (!prod) return { precioNormalUnidad: 0, precioUnitarioPieza: 0, totalUds: 0, importeNormal: 0 };
+    const costoCajaBase = Number(prod.costoCaja) || 0;
+    const pCaja = Number(prod.pCaja) || 1;
+    const uPq = Number(prod.uPq) || 0;
+    const precioPaqBase = pCaja > 0 ? costoCajaBase / pCaja : costoCajaBase;
+
+    const baseSeleccionada = unidadVenta === 'paquete' ? precioPaqBase : costoCajaBase;
+    const paqEnSeleccion = unidadVenta === 'paquete' ? 1 : pCaja;
+    const totalUds = unidadVenta === 'paquete' ? uPq * cantidad : uPq * pCaja * cantidad;
+
+    let precioConImpresion = baseSeleccionada;
     switch (cotImpresion) {
       case '1tinta':
-        return baseConDesc * 1.25;
+        precioConImpresion = baseSeleccionada * 1.25;
+        break;
       case '2tintas':
-        return baseConDesc * 1.30;
+        precioConImpresion = baseSeleccionada * 1.30;
+        break;
       case '1tintamx':
-        return baseConDesc + 0.70 * paqPorCaja;
+        precioConImpresion = baseSeleccionada + 0.70 * paqEnSeleccion;
+        break;
       case '2tintasmx':
-        return baseConDesc + 1.00 * paqPorCaja;
+        precioConImpresion = baseSeleccionada + 1.00 * paqEnSeleccion;
+        break;
       default:
-        return baseConDesc;
+        precioConImpresion = baseSeleccionada;
     }
+
+    const importeNormal = precioConImpresion * cantidad;
+    const precioUnitarioPieza = totalUds > 0 ? importeNormal / totalUds : 0;
+
+    return {
+      precioNormalUnidad: precioConImpresion,
+      precioUnitarioPieza,
+      totalUds,
+      importeNormal
+    };
   };
 
-  const cotSubtotal = useMemo(() => {
+  const cotSubtotalNormal = useMemo(() => {
     return cotItems.reduce((acc, row) => {
       const prod = inventory.find((p) => p.sku === row.sku);
-      return acc + calcCotPrice(prod) * (Number(row.cajas) || 0);
+      const { importeNormal } = calcLineCotizacion(prod, row.unidadVenta, Number(row.cantidad) || 0);
+      return acc + importeNormal;
     }, 0);
-  }, [cotItems, inventory, selectedCotClient, cotImpresion]);
+  }, [cotItems, inventory, cotImpresion]);
 
-  const cotIva = cotSubtotal * 0.16;
-  const cotTotal = cotSubtotal + cotIva;
+  const descuentoPctCot = Number(selectedCotClient.descuento) || 0;
+  const cotDescuentoMonto = cotSubtotalNormal * (descuentoPctCot / 100);
+  const cotSubtotalNeto = cotSubtotalNormal - cotDescuentoMonto;
+  const cotIva = cotSubtotalNeto * 0.16;
+  const cotTotalGeneral = cotSubtotalNeto + cotIva;
 
+  // Cálculos Orden de Pedido (solo Admin)
   const selectedOrdClient = useMemo(
     () => clients.find((c) => c.id === ordClientId) || null,
     [clients, ordClientId]
@@ -362,6 +505,7 @@ export default function App() {
   const ordTotal = ordSubtotal + (Number(ordEnvio) || 0) + ordIva;
 
   const handleConfirmOrder = async () => {
+    if (!isAdmin) return;
     if (!selectedOrdClient) return alert('Selecciona un Cliente o Distribuidor.');
     const validLines = ordItems
       .map((row) => {
@@ -383,7 +527,6 @@ export default function App() {
       .filter(Boolean);
 
     if (!validLines.length) return alert('Agrega al menos un SKU con cantidad de cajas.');
-
     const sinStock = validLines.find((l) => l.cajas > l.stockActual);
     if (sinStock) {
       return alert(`Stock insuficiente para ${sinStock.sku}. Disponible: ${sinStock.stockActual} cajas.`);
@@ -416,7 +559,7 @@ export default function App() {
     await batch.commit();
     setOrdItems([{ sku: '', cajas: 1, customDesc: null }]);
     setOrdEnvio(0);
-    alert(`Pedido #${ordFolio} confirmado. El stock en bodega se descontó automáticamente.`);
+    alert(`Pedido #${ordFolio} confirmado y stock actualizado.`);
   };
 
   if (authLoading) {
@@ -429,23 +572,18 @@ export default function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-stone-900 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">La Pajarita</h1>
-            <p className="text-sm text-slate-500 mt-1">Sistema Operativo Interno — Inventario, Cotizador y Pedidos</p>
+            <h1 className="text-3xl font-serif tracking-wide text-stone-900">la pajarita</h1>
+            <p className="text-xs uppercase tracking-widest text-stone-500 mt-1">Sistema Operativo Interno</p>
           </div>
-          {accessDeniedMsg && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-lg">
-              {accessDeniedMsg}
-            </div>
-          )}
-          <p className="text-xs text-slate-600">
-            Inicia sesión con tu cuenta autorizada de Google para acceder a los datos en tiempo real.
+          <p className="text-xs text-stone-600">
+            Inicia sesión con tu cuenta de Google. Los administradores acceden a gestión completa y el equipo comercial a catálogo y cotizador.
           </p>
           <button
             onClick={handleGoogleLogin}
-            className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow transition"
+            className="w-full py-3 px-4 bg-stone-900 hover:bg-stone-800 text-white font-semibold rounded-xl shadow transition"
           >
             Iniciar sesión con Google
           </button>
@@ -454,61 +592,70 @@ export default function App() {
     );
   }
 
-  const filteredInventory = inventory.filter(
-    (p) =>
-      p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const ejecutivoActual = ejecutivos.find((e) => e.id === cotEjecutivoId) || ejecutivos[0];
+  const modalidadShort = MODALIDADES_IMPRESION.find((m) => m.id === cotImpresion)?.short || 'Sin impresión';
 
-  const firmaActual = EJECUTIVOS.find((e) => e.nombre === cotEjecutivo);
+  // Pestañas visibles según rol
+  const availableTabs = isAdmin
+    ? [
+        { id: 'inventario', label: 'Inventario', icon: Package },
+        { id: 'cotizador', label: 'Cotizador', icon: FileText },
+        { id: 'clientes', label: 'Distribuidores', icon: Users },
+        { id: 'ejecutivos', label: 'Ejecutivos y Firmas', icon: UserCheck },
+        { id: 'pedido', label: 'Nueva Orden', icon: ShoppingCart },
+        { id: 'record', label: 'Récord Pedidos', icon: History }
+      ]
+    : [
+        { id: 'inventario', label: 'Catálogo Inventario', icon: Package },
+        { id: 'cotizador', label: 'Cotizador', icon: FileText }
+      ];
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800">
-      <header className="bg-slate-900 text-white px-6 py-4 shadow-md no-print">
+    <div className="min-h-screen bg-stone-100 text-stone-800">
+      {/* Barra superior (oculta al imprimir) */}
+      <header className="bg-stone-900 text-white px-6 py-3.5 shadow-md no-print">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold tracking-tight">La Pajarita — Sistema Operativo Interno</h1>
-            <p className="text-xs text-slate-300">Sesión activa: {user.email}</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-serif tracking-wider">la pajarita</h1>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-semibold ${isAdmin ? 'bg-emerald-700 text-white' : 'bg-stone-700 text-stone-200'}`}>
+                {isAdmin ? 'Administrador' : 'Consulta / Cotizador'}
+              </span>
+            </div>
+            <p className="text-xs text-stone-400">{user.email}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {[
-              { id: 'inventario', label: 'Inventario', icon: Package },
-              { id: 'clientes', label: 'Distribuidores', icon: Users },
-              { id: 'cotizador', label: 'Cotizador', icon: FileText },
-              { id: 'pedido', label: 'Nueva Orden', icon: ShoppingCart },
-              { id: 'record', label: 'Récord Pedidos', icon: History }
-            ].map((tab) => {
+            {availableTabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition ${
-                    activeTab === tab.id ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium transition ${
+                    activeTab === tab.id ? 'bg-stone-100 text-stone-900 font-bold' : 'bg-stone-800 text-stone-200 hover:bg-stone-700'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-3.5 h-3.5" />
                   {tab.label}
                 </button>
               );
             })}
             <button
               onClick={handleLogout}
-              title="Cerrar sesión"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-red-900/60 hover:bg-red-800 text-red-100"
+              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-red-950 hover:bg-red-900 text-red-200"
             >
-              <LogOut className="w-4 h-4" /> Salir
+              <LogOut className="w-3.5 h-3.5" /> Salir
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6">
-        {inventory.length === 0 && (
+      <main className="max-w-7xl mx-auto p-4 md:p-6">
+        {isAdmin && inventory.length === 0 && (
           <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4 no-print">
             <div>
-              <h2 className="font-semibold text-amber-900">Tu base de datos en Firebase está lista para inicializarse</h2>
-              <p className="text-sm text-amber-800">Haz clic para subir automáticamente tus 39 SKUs y distribuidores base.</p>
+              <h2 className="font-semibold text-amber-900">Base de datos lista para inicializarse</h2>
+              <p className="text-sm text-amber-800">Carga automáticamente tus 39 SKUs, distribuidores y ejecutivos con firmas.</p>
             </div>
             <button
               onClick={seedDatabase}
@@ -516,82 +663,117 @@ export default function App() {
               className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-lg font-medium text-sm"
             >
               <Database className="w-4 h-4" />
-              {loadingSeed ? 'Cargando...' : 'Cargar Catálogo Inicial (39 SKUs)'}
+              {loadingSeed ? 'Cargando...' : 'Cargar Catálogo Inicial'}
             </button>
           </div>
         )}
 
+        {/* TAB 1: INVENTARIO (Edición solo Admin; Consulta para los demás) */}
         {activeTab === 'inventario' && (
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl shadow-sm border">
-              <div className="relative flex-1 min-w-[240px]">
-                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Buscar por SKU o descripción..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <label className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer">
-                  <Upload className="w-4 h-4" />
-                  Importar CSV (Sheets)
-                  <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
-                </label>
-                <button
-                  onClick={() => exportToCSV('inventario_la_pajarita.csv', inventory)}
-                  className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg text-sm font-medium"
-                >
-                  <Download className="w-4 h-4" />
-                  Descargar CSV
-                </button>
-                <button
-                  onClick={() => setShowProdModal(true)}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium"
-                >
-                  <Plus className="w-4 h-4" />
-                  Nuevo SKU
-                </button>
+            {/* Barra de Filtros Inteligentes */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[220px]">
+                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-stone-400" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por SKU o descripción..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-stone-500" />
+                  <select
+                    value={filterSize}
+                    onChange={(e) => setFilterSize(e.target.value)}
+                    className="border rounded-lg px-3 py-2 text-sm bg-stone-50"
+                  >
+                    {TAMANOS_FILTER.map((t) => (
+                      <option key={t} value={t}>Tamaño: {t}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filterMaterial}
+                    onChange={(e) => setFilterMaterial(e.target.value)}
+                    className="border rounded-lg px-3 py-2 text-sm bg-stone-50"
+                  >
+                    {MATERIALES_FILTER.map((m) => (
+                      <option key={m} value={m}>Material: {m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {isAdmin && (
+                  <div className="flex flex-wrap gap-2">
+                    <label className="flex items-center gap-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 px-3 py-2 rounded-lg text-xs font-medium cursor-pointer">
+                      <Upload className="w-3.5 h-3.5" /> Importar CSV
+                      <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
+                    </label>
+                    <button
+                      onClick={() => exportToCSV('inventario_la_pajarita.csv', inventory)}
+                      className="flex items-center gap-1.5 bg-stone-800 text-white px-3 py-2 rounded-lg text-xs font-medium"
+                    >
+                      <Download className="w-3.5 h-3.5" /> CSV
+                    </button>
+                    <button
+                      onClick={() => setShowProdModal(true)}
+                      className="flex items-center gap-1.5 bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-medium"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Nuevo SKU
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="bg-slate-100 text-slate-700 uppercase text-xs">
+                <thead className="bg-stone-800 text-white uppercase text-xs">
                   <tr>
                     <th className="px-4 py-3">SKU</th>
                     <th className="px-4 py-3">Descripción</th>
+                    <th className="px-4 py-3 text-center">Tamaño / Material</th>
                     <th className="px-4 py-3 text-center">Stock Cajas</th>
-                    <th className="px-4 py-3 text-right">Costo Caja Base</th>
-                    <th className="px-4 py-3 text-center">U/PQ</th>
-                    <th className="px-4 py-3 text-center">P/CAJA</th>
-                    <th className="px-4 py-3 text-right">Precio/Paq</th>
-                    <th className="px-4 py-3 text-right">Valor Stock</th>
+                    <th className="px-4 py-3 text-right">Precio Caja</th>
+                    <th className="px-4 py-3 text-right">Precio Paquete</th>
+                    <th className="px-4 py-3 text-center">U/PQ • P/CAJA</th>
+                    {isAdmin && <th className="px-4 py-3 text-right">Valor Stock</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {filteredInventory.map((item) => {
-                    const precioPaq = item.pCaja > 0 ? item.costoCaja / item.pCaja : 0;
+                    const precioPaq = item.pCaja > 0 ? item.costoCaja / item.pCaja : item.costoCaja;
                     return (
-                      <tr key={item.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 font-mono font-semibold text-slate-900">{item.sku}</td>
-                        <td className="px-4 py-3">{item.descripcion}</td>
+                      <tr key={item.id} className="hover:bg-stone-50">
+                        <td className="px-4 py-3 font-mono font-semibold text-stone-900">{item.sku}</td>
+                        <td className="px-4 py-3 text-xs">{item.descripcion}</td>
+                        <td className="px-4 py-3 text-center text-xs text-stone-500">
+                          {extractSize(item.sku, item.descripcion)} • {extractMaterial(item.sku, item.descripcion)}
+                        </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-2">
-                            <button onClick={() => adjustStock(item, -1)} className="px-2 py-0.5 bg-slate-200 rounded hover:bg-slate-300">-</button>
-                            <span className={`font-bold min-w-[2rem] text-center ${item.stock <= 5 ? 'text-red-600' : 'text-emerald-700'}`}>
-                              {item.stock}
-                            </span>
-                            <button onClick={() => adjustStock(item, 1)} className="px-2 py-0.5 bg-slate-200 rounded hover:bg-slate-300">+</button>
-                          </div>
+                          {isAdmin ? (
+                            <div className="flex items-center justify-center gap-2">
+                              <button onClick={() => adjustStock(item, -1)} className="px-2 py-0.5 bg-stone-200 rounded hover:bg-stone-300">-</button>
+                              <span className={`font-bold min-w-[2rem] text-center ${item.stock <= 5 ? 'text-red-600' : 'text-emerald-700'}`}>
+                                {item.stock}
+                              </span>
+                              <button onClick={() => adjustStock(item, 1)} className="px-2 py-0.5 bg-stone-200 rounded hover:bg-stone-300">+</button>
+                            </div>
+                          ) : (
+                            <div className="text-center font-bold text-stone-800">{item.stock} cajas</div>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.costoCaja)}</td>
-                        <td className="px-4 py-3 text-center">{item.uPq}</td>
-                        <td className="px-4 py-3 text-center">{item.pCaja}</td>
-                        <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(precioPaq)}</td>
-                        <td className="px-4 py-3 text-right font-semibold">{formatCurrency(item.stock * item.costoCaja)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-stone-700">{formatCurrency(precioPaq)}</td>
+                        <td className="px-4 py-3 text-center text-xs text-stone-600">{item.uPq} uds • {item.pCaja} paq</td>
+                        {isAdmin && (
+                          <td className="px-4 py-3 text-right font-semibold text-stone-900">
+                            {formatCurrency(item.stock * item.costoCaja)}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -601,35 +783,370 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'clientes' && (
+        {/* TAB 2: COTIZADOR ESTILO INSTITUCIONAL HORIZONTAL (IDÉNTICO A COTIZACION HYATT) */}
+        {activeTab === 'cotizador' && (
+          <div className="space-y-4">
+            {/* Panel de controles y filtros (no se imprime en el PDF) */}
+            <div className="no-print bg-white p-4 rounded-xl shadow-sm border space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+                <h2 className="font-bold text-stone-900">Configuración de Cotización</h2>
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-2 bg-stone-900 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:bg-stone-800"
+                >
+                  <Printer className="w-4 h-4" /> Imprimir / Guardar PDF Horizontal
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1">Cliente / Distribuidor Base</label>
+                  <select
+                    value={cotClientId}
+                    onChange={(e) => handleSelectCotClient(e.target.value)}
+                    className="w-full border rounded-lg p-2 text-xs bg-white"
+                  >
+                    <option value="">-- Cliente Nuevo / Sin Descuento --</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>{c.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1">Modalidad de Impresión</label>
+                  <select
+                    value={cotImpresion}
+                    onChange={(e) => setCotImpresion(e.target.value)}
+                    className="w-full border rounded-lg p-2 text-xs bg-white font-semibold"
+                  >
+                    {MODALIDADES_IMPRESION.map((m) => (
+                      <option key={m.id} value={m.id}>{m.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1">Ejecutivo que Firma</label>
+                  <select
+                    value={cotEjecutivoId}
+                    onChange={(e) => setCotEjecutivoId(e.target.value)}
+                    className="w-full border rounded-lg p-2 text-xs bg-white"
+                  >
+                    {ejecutivos.map((ej) => (
+                      <option key={ej.id} value={ej.id}>{ej.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-600 mb-1">Filtrar catálogo de SKUs</label>
+                  <div className="flex gap-1">
+                    <select
+                      value={filterSize}
+                      onChange={(e) => setFilterSize(e.target.value)}
+                      className="w-1/2 border rounded-lg p-2 text-xs bg-stone-50"
+                    >
+                      {TAMANOS_FILTER.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select
+                      value={filterMaterial}
+                      onChange={(e) => setFilterMaterial(e.target.value)}
+                      className="w-1/2 border rounded-lg p-2 text-xs bg-stone-50"
+                    >
+                      {MATERIALES_FILTER.map((m) => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* HOJA DE COTIZACIÓN HORIZONTAL (ESTILO HYATT QUERÉTARO) */}
+            <div className="bg-white shadow-md border border-stone-300 max-w-6xl mx-auto flex flex-col md:flex-row overflow-hidden">
+              {/* Columna lateral izquierda con foto editorial y marca */}
+              <div className="w-full md:w-52 bg-stone-100 border-r border-stone-200 flex flex-col justify-between p-4 shrink-0">
+                <div className="space-y-3">
+                  <div className="text-center py-2 border-b border-stone-300">
+                    <span className="font-serif text-2xl tracking-wider text-stone-900">la pajarita</span>
+                    <span className="block text-[9px] uppercase tracking-[0.25em] text-stone-500">MÉXICO</span>
+                  </div>
+                  <img
+                    src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=500&q=80"
+                    alt="Mesa La Pajarita"
+                    className="w-full h-56 object-cover rounded shadow-sm grayscale-[15%]"
+                  />
+                </div>
+                <div className="text-[10px] text-stone-500 space-y-1 pt-4 border-t border-stone-300">
+                  <p className="font-semibold text-stone-700">World Marketing Face S. de R.L. de CV.</p>
+                  <p>Carretera México Toluca 5804. Contadero.</p>
+                  <p>CP 05500 Cuajimalpa CDMX.</p>
+                  <p className="font-medium text-stone-700 pt-1">@lapajarita.cdmx</p>
+                </div>
+              </div>
+
+              {/* Cuerpo principal derecho */}
+              <div className="flex-1 p-6 space-y-5">
+                {/* Encabezado datos del cliente */}
+                <div className="flex flex-col md:flex-row justify-between gap-4 border-b border-stone-300 pb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 flex-1 text-xs">
+                    <div>
+                      <span className="block text-[10px] font-bold uppercase text-stone-500">NOMBRE CLIENTE</span>
+                      <input
+                        type="text"
+                        placeholder="Ej. HYATT QUERÉTARO CENTRO"
+                        value={cotClienteManual}
+                        onChange={(e) => setCotClienteManual(e.target.value)}
+                        className="w-full font-bold text-stone-900 border-b border-stone-200 focus:border-stone-800 outline-none py-0.5"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-bold uppercase text-stone-500">NOMBRE DE CONTACTO</span>
+                      <input
+                        type="text"
+                        placeholder="Nombre de contacto"
+                        value={cotContactoManual}
+                        onChange={(e) => setCotContactoManual(e.target.value)}
+                        className="w-full text-stone-800 border-b border-stone-200 focus:border-stone-800 outline-none py-0.5"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-bold uppercase text-stone-500">TELÉFONO</span>
+                      <input
+                        type="text"
+                        placeholder="Teléfono"
+                        value={cotTelefonoManual}
+                        onChange={(e) => setCotTelefonoManual(e.target.value)}
+                        className="w-full text-stone-800 border-b border-stone-200 focus:border-stone-800 outline-none py-0.5"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-bold uppercase text-stone-500">CORREO</span>
+                      <input
+                        type="text"
+                        placeholder="correo@cliente.com"
+                        value={cotCorreoManual}
+                        onChange={(e) => setCotCorreoManual(e.target.value)}
+                        className="w-full text-stone-800 border-b border-stone-200 focus:border-stone-800 outline-none py-0.5"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <span className="block text-[10px] font-bold uppercase text-stone-500">DIRECCIÓN DE ENVÍO</span>
+                      <input
+                        type="text"
+                        placeholder="Ciudad / Dirección de entrega"
+                        value={cotDireccionManual}
+                        onChange={(e) => setCotDireccionManual(e.target.value)}
+                        className="w-full text-stone-800 border-b border-stone-200 focus:border-stone-800 outline-none py-0.5"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0 flex flex-col justify-between">
+                    <div>
+                      <span className="inline-block bg-stone-900 text-white text-xs font-bold tracking-widest px-3 py-1 uppercase">
+                        COTIZACIÓN
+                      </span>
+                      <p className="text-[11px] text-stone-500 mt-1">
+                        Folio: <input type="number" value={cotFolio} onChange={(e) => setCotFolio(e.target.value)} className="w-14 text-right font-bold text-stone-800" />
+                      </p>
+                    </div>
+                    <div className="mt-2">
+                      <span className="block text-[10px] font-bold uppercase text-stone-500">FECHA DE COTIZACIÓN</span>
+                      <span className="text-xs font-semibold text-stone-900">{new Date().toLocaleDateString('es-MX')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tabla de productos (sin porcentaje de descuento visible, muestra costo normal) */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px] border-collapse">
+                    <thead>
+                      <tr className="bg-stone-900 text-white uppercase text-[10px]">
+                        <th className="p-2 text-left">SKU</th>
+                        <th className="p-2 text-left">Producto</th>
+                        <th className="p-2 text-center">Presentación</th>
+                        <th className="p-2 text-center">Cant.</th>
+                        <th className="p-2 text-center">Uds x Paq</th>
+                        <th className="p-2 text-center">Paq x Caja</th>
+                        <th className="p-2 text-center">Total Uds</th>
+                        <th className="p-2 text-right">Precio Unitario</th>
+                        <th className="p-2 text-right">Precio Caja/Paq</th>
+                        <th className="p-2 text-center">Impresión</th>
+                        <th className="p-2 text-right">Total Importe</th>
+                        <th className="p-2 no-print"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-200 border-b border-stone-300">
+                      {cotItems.map((row, idx) => {
+                        const prod = inventory.find((p) => p.sku === row.sku);
+                        const calc = calcLineCotizacion(prod, row.unidadVenta, Number(row.cantidad) || 0);
+                        return (
+                          <tr key={idx} className="hover:bg-stone-50">
+                            <td className="p-1.5 font-mono font-bold text-stone-900">
+                              <select
+                                value={row.sku}
+                                onChange={(e) => {
+                                  const up = [...cotItems];
+                                  up[idx].sku = e.target.value;
+                                  setCotItems(up);
+                                }}
+                                className="border rounded p-1 font-mono text-[11px] w-28 bg-white"
+                              >
+                                <option value="">SKU...</option>
+                                {filteredInventory.map((p) => (
+                                  <option key={p.sku} value={p.sku}>{p.sku}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="p-1.5 text-[10px] leading-tight max-w-[180px]">{prod?.descripcion || '-'}</td>
+                            <td className="p-1.5 text-center">
+                              <select
+                                value={row.unidadVenta}
+                                onChange={(e) => {
+                                  const up = [...cotItems];
+                                  up[idx].unidadVenta = e.target.value;
+                                  setCotItems(up);
+                                }}
+                                className="border rounded p-1 text-[10px] bg-white"
+                              >
+                                <option value="caja">Caja</option>
+                                <option value="paquete">Paquete</option>
+                              </select>
+                            </td>
+                            <td className="p-1.5 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                value={row.cantidad}
+                                onChange={(e) => {
+                                  const up = [...cotItems];
+                                  up[idx].cantidad = e.target.value;
+                                  setCotItems(up);
+                                }}
+                                className="border rounded p-1 w-12 text-center font-semibold"
+                              />
+                            </td>
+                            <td className="p-1.5 text-center">{prod?.uPq || 0}</td>
+                            <td className="p-1.5 text-center">{prod?.pCaja || 0}</td>
+                            <td className="p-1.5 text-center font-medium">{calc.totalUds.toLocaleString('es-MX')}</td>
+                            <td className="p-1.5 text-right">{formatCurrency(calc.precioUnitarioPieza, 4)}</td>
+                            <td className="p-1.5 text-right font-medium">{formatCurrency(calc.precioNormalUnidad)}</td>
+                            <td className="p-1.5 text-center text-[10px]">{modalidadShort}</td>
+                            <td className="p-1.5 text-right font-bold text-stone-900">{formatCurrency(calc.importeNormal)}</td>
+                            <td className="p-1.5 text-center no-print">
+                              <button onClick={() => setCotItems(cotItems.filter((_, i) => i !== idx))} className="text-red-500">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <button
+                  onClick={() => setCotItems([...cotItems, { sku: '', unidadVenta: 'caja', cantidad: 1 }])}
+                  className="no-print flex items-center gap-1 text-xs text-stone-800 font-bold hover:underline"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Agregar renglón
+                </button>
+
+                {/* Pie de cotización: Notas + Firma Electrónica a la izquierda, Totales con Descuento separado a la derecha */}
+                <div className="flex flex-col md:flex-row justify-between gap-6 pt-2">
+                  <div className="flex-1 space-y-4">
+                    <div>
+                      <span className="block text-[10px] font-bold uppercase text-stone-700 mb-1">NOTAS:</span>
+                      <textarea
+                        rows="5"
+                        value={cotNotas}
+                        onChange={(e) => setCotNotas(e.target.value)}
+                        className="w-full text-[10px] leading-snug text-stone-600 border border-stone-200 rounded p-2 bg-stone-50/50"
+                      />
+                    </div>
+
+                    {/* Firma electrónica corregida debajo de notas */}
+                    <div className="flex items-end gap-6 pt-1">
+                      <div>
+                        {ejecutivoActual?.firmaUrl && (
+                          <img
+                            src={toDirectDriveImg(ejecutivoActual.firmaUrl)}
+                            alt={`Firma ${ejecutivoActual.nombre}`}
+                            className="h-14 object-contain mb-1"
+                            referrerPolicy="no-referrer"
+                          />
+                        )}
+                        <div className="border-t border-stone-400 pt-1 text-[11px]">
+                          <p className="font-bold text-stone-900">{ejecutivoActual?.nombre}</p>
+                          <p className="text-stone-500 text-[10px]">{ejecutivoActual?.puesto || 'Ventas'}</p>
+                          <p className="text-stone-500 text-[10px]">{ejecutivoActual?.telefono}</p>
+                          <p className="text-stone-500 text-[10px]">{ejecutivoActual?.correo}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cuadro de totales: Subtotal Precio Normal, Descuento, IVA y Total General */}
+                  <div className="w-full md:w-64 shrink-0 self-end">
+                    <table className="w-full text-xs border border-stone-300">
+                      <tbody className="divide-y divide-stone-200">
+                        <tr className="bg-stone-50">
+                          <td className="p-2 font-bold text-stone-700">SUBTOTAL</td>
+                          <td className="p-2 text-right font-semibold">{formatCurrency(cotSubtotalNormal)}</td>
+                        </tr>
+                        {cotDescuentoMonto > 0 && (
+                          <tr className="bg-emerald-50/60 text-emerald-900">
+                            <td className="p-2 font-bold">DESCUENTO</td>
+                            <td className="p-2 text-right font-semibold">- {formatCurrency(cotDescuentoMonto)}</td>
+                          </tr>
+                        )}
+                        <tr className="bg-stone-50">
+                          <td className="p-2 font-bold text-stone-700">IVA (16%)</td>
+                          <td className="p-2 text-right font-semibold">{formatCurrency(cotIva)}</td>
+                        </tr>
+                        <tr className="bg-stone-900 text-white">
+                          <td className="p-2.5 font-bold">TOTAL GENERAL</td>
+                          <td className="p-2.5 text-right font-bold text-sm">{formatCurrency(cotTotalGeneral)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: DISTRIBUIDORES (Solo Admin) */}
+        {isAdmin && activeTab === 'clientes' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border">
-              <h2 className="font-bold text-lg">Directorio de Clientes y Distribuidores</h2>
+              <h2 className="font-bold text-lg">Clientes y Distribuidores</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => exportToCSV('clientes_distribuidores.csv', clients)}
-                  className="flex items-center gap-2 bg-slate-800 text-white px-3 py-2 rounded-lg text-sm"
+                  className="flex items-center gap-2 bg-stone-800 text-white px-3 py-2 rounded-lg text-xs"
                 >
                   <Download className="w-4 h-4" /> Exportar CSV
                 </button>
                 <button
                   onClick={() => setShowClientModal(true)}
-                  className="flex items-center gap-2 bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm"
+                  className="flex items-center gap-2 bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs"
                 >
-                  <Plus className="w-4 h-4" /> Agregar Cliente
+                  <Plus className="w-4 h-4" /> Nuevo Cliente
                 </button>
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
               <table className="w-full text-sm text-left">
-                <thead className="bg-slate-100 text-xs uppercase">
+                <thead className="bg-stone-800 text-white text-xs uppercase">
                   <tr>
-                    <th className="px-4 py-3">Razón Social / Nombre</th>
+                    <th className="px-4 py-3">Razón Social</th>
                     <th className="px-4 py-3">Tipo</th>
                     <th className="px-4 py-3 text-center">% Descuento</th>
-                    <th className="px-4 py-3">RFC</th>
                     <th className="px-4 py-3">Contacto</th>
-                    <th className="px-4 py-3">Dirección de Entrega</th>
+                    <th className="px-4 py-3">Correo / Teléfono</th>
+                    <th className="px-4 py-3">Dirección</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -638,9 +1155,9 @@ export default function App() {
                       <td className="px-4 py-3 font-semibold">{c.nombre}</td>
                       <td className="px-4 py-3">{c.tipo}</td>
                       <td className="px-4 py-3 text-center font-bold text-emerald-700">{c.descuento}%</td>
-                      <td className="px-4 py-3">{c.rfc}</td>
-                      <td className="px-4 py-3">{c.contacto} {c.telefono && `(${c.telefono})`}</td>
-                      <td className="px-4 py-3">{c.direccion}</td>
+                      <td className="px-4 py-3">{c.contacto}</td>
+                      <td className="px-4 py-3 text-xs">{c.correo} {c.telefono && `• ${c.telefono}`}</td>
+                      <td className="px-4 py-3 text-xs">{c.direccion}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -649,211 +1166,82 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'cotizador' && (
-          <div className="bg-white p-8 rounded-xl shadow-sm border max-w-5xl mx-auto space-y-6">
-            <div className="flex justify-between items-start border-b pb-4">
+        {/* TAB 4: EJECUTIVOS Y FIRMAS (Solo Admin) */}
+        {isAdmin && activeTab === 'ejecutivos' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">COTIZACIÓN COMERCIAL — LA PAJARITA</h2>
-                <p className="text-sm text-slate-500">Fecha: {new Date().toLocaleDateString('es-MX')}</p>
+                <h2 className="font-bold text-lg">Ejecutivos y Firmas Electrónicas</h2>
+                <p className="text-xs text-stone-500">Pega el enlace compartido de Google Drive de cada firma; el sistema lo convierte automáticamente.</p>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <label className="text-xs text-slate-500 block">Folio</label>
-                  <input
-                    type="number"
-                    value={cotFolio}
-                    onChange={(e) => setCotFolio(e.target.value)}
-                    className="border rounded px-2 py-1 w-24 text-right font-bold"
-                  />
-                </div>
-                <button
-                  onClick={() => window.print()}
-                  className="no-print flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800"
-                >
-                  <Printer className="w-4 h-4" /> Imprimir / Guardar PDF
-                </button>
-              </div>
+              <button
+                onClick={() => setShowEjecModal(true)}
+                className="flex items-center gap-2 bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs"
+              >
+                <Plus className="w-4 h-4" /> Agregar Ejecutivo
+              </button>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Cliente / Distribuidor</label>
-                <select
-                  value={cotClientId}
-                  onChange={(e) => setCotClientId(e.target.value)}
-                  className="w-full border rounded-lg p-2 text-sm bg-white"
-                >
-                  <option value="">-- Seleccionar Cliente (0% desc) --</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre} ({c.descuento}% desc)
-                    </option>
-                  ))}
-                </select>
-                {selectedCotClient.direccion && (
-                  <p className="text-xs text-slate-500 mt-1">{selectedCotClient.direccion}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Modalidad de Impresión</label>
-                <select
-                  value={cotImpresion}
-                  onChange={(e) => setCotImpresion(e.target.value)}
-                  className="w-full border rounded-lg p-2 text-sm bg-white font-medium text-emerald-800"
-                >
-                  {MODALIDADES_IMPRESION.map((m) => (
-                    <option key={m.id} value={m.id}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Ejecutivo que Cotiza</label>
-                <select
-                  value={cotEjecutivo}
-                  onChange={(e) => setCotEjecutivo(e.target.value)}
-                  className="w-full border rounded-lg p-2 text-sm bg-white"
-                >
-                  {EJECUTIVOS.map((ej) => (
-                    <option key={ej.nombre} value={ej.nombre}>{ej.nombre}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-slate-800 text-white text-xs uppercase">
-                  <th className="p-2.5 text-left">SKU</th>
-                  <th className="p-2.5 text-left">Descripción</th>
-                  <th className="p-2.5 text-center">Paq/Caja</th>
-                  <th className="p-2.5 text-center">Cajas</th>
-                  <th className="p-2.5 text-right">Precio Caja Cotizado</th>
-                  <th className="p-2.5 text-right">Importe</th>
-                  <th className="p-2.5 no-print"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y border">
-                {cotItems.map((row, idx) => {
-                  const prod = inventory.find((p) => p.sku === row.sku);
-                  const unitPrice = calcCotPrice(prod);
-                  const lineTotal = unitPrice * (Number(row.cajas) || 0);
-                  return (
-                    <tr key={idx}>
-                      <td className="p-2">
-                        <select
-                          value={row.sku}
-                          onChange={(e) => {
-                            const updated = [...cotItems];
-                            updated[idx].sku = e.target.value;
-                            setCotItems(updated);
-                          }}
-                          className="border rounded p-1.5 text-sm font-mono w-36"
-                        >
-                          <option value="">Elegir SKU...</option>
-                          {inventory.map((p) => (
-                            <option key={p.sku} value={p.sku}>{p.sku}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-2 text-xs">{prod?.descripcion || '-'}</td>
-                      <td className="p-2 text-center">{prod?.pCaja || 0}</td>
-                      <td className="p-2 text-center">
-                        <input
-                          type="number"
-                          min="1"
-                          value={row.cajas}
-                          onChange={(e) => {
-                            const updated = [...cotItems];
-                            updated[idx].cajas = e.target.value;
-                            setCotItems(updated);
-                          }}
-                          className="border rounded p-1 w-20 text-center"
-                        />
-                      </td>
-                      <td className="p-2 text-right font-medium">{formatCurrency(unitPrice)}</td>
-                      <td className="p-2 text-right font-bold">{formatCurrency(lineTotal)}</td>
-                      <td className="p-2 text-center no-print">
-                        <button
-                          onClick={() => setCotItems(cotItems.filter((_, i) => i !== idx))}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            <button
-              onClick={() => setCotItems([...cotItems, { sku: '', cajas: 1 }])}
-              className="no-print flex items-center gap-1 text-sm text-emerald-700 font-semibold hover:underline"
-            >
-              <Plus className="w-4 h-4" /> Agregar partida
-            </button>
-
-            <div className="flex flex-col md:flex-row justify-between gap-6 pt-4 border-t">
-              <div className="flex-1 space-y-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Notas y Condiciones</label>
-                  <textarea
-                    rows="3"
-                    value={cotNotas}
-                    onChange={(e) => setCotNotas(e.target.value)}
-                    className="w-full border rounded-lg p-2 text-xs"
-                  />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {ejecutivos.map((ej) => (
+                <div key={ej.id} className="bg-white p-4 rounded-xl shadow-sm border space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-bold text-stone-900">{ej.nombre}</h3>
+                      <p className="text-xs text-stone-500">{ej.puesto} • {ej.correo}</p>
+                    </div>
+                    <button
+                      onClick={() => deleteDoc(doc(db, 'ejecutivos', ej.id))}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="border rounded p-2 bg-stone-50 h-20 flex items-center justify-center">
+                    {ej.firmaUrl ? (
+                      <img src={toDirectDriveImg(ej.firmaUrl)} alt={ej.nombre} className="max-h-16 object-contain" referrerPolicy="no-referrer" />
+                    ) : (
+                      <span className="text-xs text-stone-400">Sin firma cargada</span>
+                    )}
+                  </div>
                 </div>
-                <div className="pt-2">
-                  <p className="text-xs text-slate-500 mb-1">Atentamente,</p>
-                  {firmaActual?.firmaUrl && (
-                    <img
-                      src={firmaActual.firmaUrl}
-                      alt={`Firma ${firmaActual.nombre}`}
-                      className="h-16 object-contain mb-1"
-                    />
-                  )}
-                  <p className="font-bold text-sm text-slate-900 border-t border-slate-400 inline-block pt-1 pr-8">
-                    {cotEjecutivo}
-                  </p>
-                  <p className="text-xs text-slate-500">Ejecutivo Comercial — La Pajarita</p>
-                </div>
-              </div>
-
-              <div className="w-full md:w-72 bg-slate-50 p-4 rounded-lg border space-y-2 h-fit">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal:</span>
-                  <span className="font-medium">{formatCurrency(cotSubtotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>IVA (16%):</span>
-                  <span className="font-medium">{formatCurrency(cotIva)}</span>
-                </div>
-                <div className="flex justify-between text-base font-bold border-t pt-2 text-slate-900">
-                  <span>Total MXN:</span>
-                  <span>{formatCurrency(cotTotal)}</span>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         )}
 
-        {activeTab === 'pedido' && (
+        {/* TAB 5: NUEVA ORDEN DE PEDIDO (Solo Admin) */}
+        {isAdmin && activeTab === 'pedido' && (
           <div className="bg-white p-6 rounded-xl shadow-sm border max-w-6xl mx-auto space-y-6">
             <div className="flex justify-between items-center border-b pb-4">
               <div>
                 <h2 className="text-xl font-bold">Solicitud de Pedido a Bodega</h2>
-                <p className="text-xs text-slate-500">Descuenta automáticamente existencias y aplica descuento del distribuidor</p>
+                <p className="text-xs text-stone-500">Descuenta automáticamente existencias y aplica descuento del distribuidor</p>
               </div>
               <div className="text-right">
-                <span className="text-xs text-slate-500 block">Folio Pedido</span>
+                <span className="text-xs text-stone-500 block">Folio Pedido</span>
                 <span className="text-xl font-bold text-emerald-700">#{ordFolio}</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border">
+            {/* Filtros rápidos para el selector de pedido */}
+            <div className="flex flex-wrap items-center gap-2 bg-stone-50 p-3 rounded-lg border text-xs">
+              <span className="font-semibold text-stone-600">Filtrar SKUs:</span>
+              <input
+                type="text"
+                placeholder="Buscar SKU o palabra..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="border rounded px-2 py-1 bg-white"
+              />
+              <select value={filterSize} onChange={(e) => setFilterSize(e.target.value)} className="border rounded px-2 py-1 bg-white">
+                {TAMANOS_FILTER.map((t) => <option key={t} value={t}>Tamaño: {t}</option>)}
+              </select>
+              <select value={filterMaterial} onChange={(e) => setFilterMaterial(e.target.value)} className="border rounded px-2 py-1 bg-white">
+                {MATERIALES_FILTER.map((m) => <option key={m} value={m}>Material: {m}</option>)}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-stone-50 p-4 rounded-lg border">
               <div>
                 <label className="block text-xs font-semibold mb-1">Cliente / Distribuidor *</label>
                 <select
@@ -885,8 +1273,8 @@ export default function App() {
                   onChange={(e) => setOrdEjecutivo(e.target.value)}
                   className="w-full border rounded-lg p-2 text-sm bg-white"
                 >
-                  {EJECUTIVOS.map((ej) => (
-                    <option key={ej.nombre} value={ej.nombre}>{ej.nombre}</option>
+                  {ejecutivos.map((ej) => (
+                    <option key={ej.id} value={ej.nombre}>{ej.nombre}</option>
                   ))}
                 </select>
               </div>
@@ -894,7 +1282,7 @@ export default function App() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-slate-100 text-xs uppercase">
+                <thead className="bg-stone-100 text-xs uppercase">
                   <tr>
                     <th className="p-2 text-left">SKU</th>
                     <th className="p-2 text-left">Producto</th>
@@ -925,7 +1313,7 @@ export default function App() {
                             className="border rounded p-1.5 font-mono text-sm w-36"
                           >
                             <option value="">SKU...</option>
-                            {inventory.map((p) => (
+                            {filteredInventory.map((p) => (
                               <option key={p.sku} value={p.sku}>{p.sku}</option>
                             ))}
                           </select>
@@ -989,12 +1377,12 @@ export default function App() {
             <div className="flex flex-col md:flex-row justify-between items-end gap-6 pt-4 border-t">
               <button
                 onClick={handleConfirmOrder}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold shadow"
+                className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-3 rounded-xl font-bold shadow"
               >
                 <CheckCircle2 className="w-5 h-5" /> Confirmar Pedido y Descontar Inventario
               </button>
 
-              <div className="w-full md:w-80 bg-slate-50 p-4 rounded-lg border space-y-2">
+              <div className="w-full md:w-80 bg-stone-50 p-4 rounded-lg border space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Subtotal Productos:</span>
                   <span>{formatCurrency(ordSubtotal)}</span>
@@ -1013,7 +1401,7 @@ export default function App() {
                   <span>IVA (16%):</span>
                   <span>{formatCurrency(ordIva)}</span>
                 </div>
-                <div className="flex justify-between text-lg font-bold border-t pt-2 text-slate-900">
+                <div className="flex justify-between text-lg font-bold border-t pt-2 text-stone-900">
                   <span>Total Pedido:</span>
                   <span>{formatCurrency(ordTotal)}</span>
                 </div>
@@ -1022,7 +1410,8 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'record' && (
+        {/* TAB 6: RÉCORD DE PEDIDOS (Solo Admin) */}
+        {isAdmin && activeTab === 'record' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border">
               <h2 className="font-bold text-lg">Récord Histórico de Órdenes Confirmadas</h2>
@@ -1043,9 +1432,9 @@ export default function App() {
                     }))
                   )
                 }
-                className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm"
+                className="flex items-center gap-2 bg-stone-800 text-white px-4 py-2 rounded-lg text-xs"
               >
-                <Download className="w-4 h-4" /> Descargar Récord (CSV / Excel)
+                <Download className="w-4 h-4" /> Descargar Récord (CSV)
               </button>
             </div>
 
@@ -1056,13 +1445,13 @@ export default function App() {
                     <div>
                       <span className="font-bold text-emerald-700 mr-3">Pedido #{ord.folio}</span>
                       <span className="font-semibold">{ord.cliente}</span>
-                      <span className="text-xs text-slate-500 ml-3">{ord.fecha} • Ejecutivo: {ord.ejecutivo}</span>
+                      <span className="text-xs text-stone-500 ml-3">{ord.fecha} • Ejecutivo: {ord.ejecutivo}</span>
                     </div>
-                    <div className="text-right font-bold text-slate-900">
-                      Total: {formatCurrency(ord.total)} <span className="text-xs font-normal text-slate-500">(Envío: {formatCurrency(ord.envio)})</span>
+                    <div className="text-right font-bold text-stone-900">
+                      Total: {formatCurrency(ord.total)} <span className="text-xs font-normal text-stone-500">(Envío: {formatCurrency(ord.envio)})</span>
                     </div>
                   </div>
-                  <div className="text-xs text-slate-600 space-y-1">
+                  <div className="text-xs text-stone-600 space-y-1">
                     {ord.partidas?.map((p, idx) => (
                       <div key={idx} className="flex justify-between">
                         <span><strong>{p.sku}</strong> — {p.descripcion} ({p.cajas} cajas, {p.descuentoPct}% desc)</span>
@@ -1073,14 +1462,15 @@ export default function App() {
                 </div>
               ))}
               {orders.length === 0 && (
-                <p className="text-center text-slate-500 py-8">Aún no hay pedidos registrados en el historial.</p>
+                <p className="text-center text-stone-500 py-8">Aún no hay pedidos registrados en el historial.</p>
               )}
             </div>
           </div>
         )}
       </main>
 
-      {showProdModal && (
+      {/* Modales exclusivos de Administrador */}
+      {isAdmin && showProdModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSaveProduct} className="bg-white rounded-xl p-6 max-w-md w-full space-y-4">
             <h3 className="font-bold text-lg">Agregar / Actualizar SKU</h3>
@@ -1106,13 +1496,13 @@ export default function App() {
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setShowProdModal(false)} className="px-4 py-2 text-sm border rounded-lg">Cancelar</button>
-              <button type="submit" className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg font-medium">Guardar</button>
+              <button type="submit" className="px-4 py-2 text-sm bg-emerald-700 text-white rounded-lg font-medium">Guardar</button>
             </div>
           </form>
         </div>
       )}
 
-      {showClientModal && (
+      {isAdmin && showClientModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSaveClient} className="bg-white rounded-xl p-6 max-w-md w-full space-y-3">
             <h3 className="font-bold text-lg">Nuevo Cliente o Distribuidor</h3>
@@ -1124,13 +1514,30 @@ export default function App() {
               </select>
               <input type="number" placeholder="% Descuento" value={newClient.descuento} onChange={(e) => setNewClient({ ...newClient, descuento: e.target.value })} className="border rounded p-2 text-sm" />
             </div>
-            <input placeholder="RFC" value={newClient.rfc} onChange={(e) => setNewClient({ ...newClient, rfc: e.target.value })} className="w-full border rounded p-2 text-sm" />
             <input placeholder="Contacto" value={newClient.contacto} onChange={(e) => setNewClient({ ...newClient, contacto: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <input placeholder="Correo" value={newClient.correo} onChange={(e) => setNewClient({ ...newClient, correo: e.target.value })} className="w-full border rounded p-2 text-sm" />
             <input placeholder="Teléfono" value={newClient.telefono} onChange={(e) => setNewClient({ ...newClient, telefono: e.target.value })} className="w-full border rounded p-2 text-sm" />
             <input placeholder="Dirección de Entrega" value={newClient.direccion} onChange={(e) => setNewClient({ ...newClient, direccion: e.target.value })} className="w-full border rounded p-2 text-sm" />
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setShowClientModal(false)} className="px-4 py-2 text-sm border rounded-lg">Cancelar</button>
-              <button type="submit" className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg font-medium">Guardar</button>
+              <button type="submit" className="px-4 py-2 text-sm bg-emerald-700 text-white rounded-lg font-medium">Guardar</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isAdmin && showEjecModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleSaveEjecutivo} className="bg-white rounded-xl p-6 max-w-md w-full space-y-3">
+            <h3 className="font-bold text-lg">Agregar Ejecutivo y Firma</h3>
+            <input required placeholder="Nombre Completo" value={newEjec.nombre} onChange={(e) => setNewEjec({ ...newEjec, nombre: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <input placeholder="Puesto (ej. Ventas)" value={newEjec.puesto} onChange={(e) => setNewEjec({ ...newEjec, puesto: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <input placeholder="Teléfono" value={newEjec.telefono} onChange={(e) => setNewEjec({ ...newEjec, telefono: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <input placeholder="Correo" value={newEjec.correo} onChange={(e) => setNewEjec({ ...newEjec, correo: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <input required placeholder="Enlace de Firma en Google Drive" value={newEjec.firmaUrl} onChange={(e) => setNewEjec({ ...newEjec, firmaUrl: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowEjecModal(false)} className="px-4 py-2 text-sm border rounded-lg">Cancelar</button>
+              <button type="submit" className="px-4 py-2 text-sm bg-emerald-700 text-white rounded-lg font-medium">Guardar</button>
             </div>
           </form>
         </div>
