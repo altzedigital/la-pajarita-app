@@ -386,4 +386,694 @@ export default function App() {
 
     await batch.commit();
     setOrdItems([{ sku: '', cajas: 1, customDesc: null }]);
-    setOrdEnvio
+    setOrdEnvio(0);
+    alert(`Pedido #${ordFolio} confirmado. El stock en bodega se descontó automáticamente.`);
+  };
+
+  const filteredInventory = inventory.filter(
+    (p) =>
+      p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.descripcion.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const firmaActual = EJECUTIVOS.find((e) => e.nombre === cotEjecutivo);
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      {/* Barra superior */}
+      <header className="bg-slate-900 text-white px-6 py-4 shadow-md no-print">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">La Pajarita — Sistema Operativo Interno</h1>
+            <p className="text-xs text-slate-300">Inventario en vivo, Cotizador con Impresión y Órdenes de Pedido</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 'inventario', label: 'Inventario', icon: Package },
+              { id: 'clientes', label: 'Distribuidores', icon: Users },
+              { id: 'cotizador', label: 'Cotizador', icon: FileText },
+              { id: 'pedido', label: 'Nueva Orden', icon: ShoppingCart },
+              { id: 'record', label: 'Récord Pedidos', icon: History }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                    activeTab === tab.id ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto p-6">
+        {/* Banner de precarga si Firestore está vacío */}
+        {inventory.length === 0 && (
+          <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4 no-print">
+            <div>
+              <h2 className="font-semibold text-amber-900">Tu base de datos en Firebase está lista para inicializarse</h2>
+              <p className="text-sm text-amber-800">Haz clic para subir automáticamente tus 39 SKUs y distribuidores base.</p>
+            </div>
+            <button
+              onClick={seedDatabase}
+              disabled={loadingSeed}
+              className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-lg font-medium text-sm"
+            >
+              <Database className="w-4 h-4" />
+              {loadingSeed ? 'Cargando...' : 'Cargar Catálogo Inicial (39 SKUs)'}
+            </button>
+          </div>
+        )}
+
+        {/* TAB 1: INVENTARIO */}
+        {activeTab === 'inventario' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl shadow-sm border">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por SKU o descripción..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <label className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  Importar CSV (Sheets)
+                  <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
+                </label>
+                <button
+                  onClick={() => exportToCSV('inventario_la_pajarita.csv', inventory)}
+                  className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  Descargar CSV
+                </button>
+                <button
+                  onClick={() => setShowProdModal(true)}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Nuevo SKU
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-100 text-slate-700 uppercase text-xs">
+                  <tr>
+                    <th className="px-4 py-3">SKU</th>
+                    <th className="px-4 py-3">Descripción</th>
+                    <th className="px-4 py-3 text-center">Stock Cajas</th>
+                    <th className="px-4 py-3 text-right">Costo Caja Base</th>
+                    <th className="px-4 py-3 text-center">U/PQ</th>
+                    <th className="px-4 py-3 text-center">P/CAJA</th>
+                    <th className="px-4 py-3 text-right">Precio/Paq</th>
+                    <th className="px-4 py-3 text-right">Valor Stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {filteredInventory.map((item) => {
+                    const precioPaq = item.pCaja > 0 ? item.costoCaja / item.pCaja : 0;
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-mono font-semibold text-slate-900">{item.sku}</td>
+                        <td className="px-4 py-3">{item.descripcion}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-2">
+                            <button onClick={() => adjustStock(item, -1)} className="px-2 py-0.5 bg-slate-200 rounded hover:bg-slate-300">-</button>
+                            <span className={`font-bold min-w-[2rem] text-center ${item.stock <= 5 ? 'text-red-600' : 'text-emerald-700'}`}>
+                              {item.stock}
+                            </span>
+                            <button onClick={() => adjustStock(item, 1)} className="px-2 py-0.5 bg-slate-200 rounded hover:bg-slate-300">+</button>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium">{formatCurrency(item.costoCaja)}</td>
+                        <td className="px-4 py-3 text-center">{item.uPq}</td>
+                        <td className="px-4 py-3 text-center">{item.pCaja}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">{formatCurrency(precioPaq)}</td>
+                        <td className="px-4 py-3 text-right font-semibold">{formatCurrency(item.stock * item.costoCaja)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: DISTRIBUIDORES */}
+        {activeTab === 'clientes' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border">
+              <h2 className="font-bold text-lg">Directorio de Clientes y Distribuidores</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => exportToCSV('clientes_distribuidores.csv', clients)}
+                  className="flex items-center gap-2 bg-slate-800 text-white px-3 py-2 rounded-lg text-sm"
+                >
+                  <Download className="w-4 h-4" /> Exportar CSV
+                </button>
+                <button
+                  onClick={() => setShowClientModal(true)}
+                  className="flex items-center gap-2 bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm"
+                >
+                  <Plus className="w-4 h-4" /> Agregar Cliente
+                </button>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-100 text-xs uppercase">
+                  <tr>
+                    <th className="px-4 py-3">Razón Social / Nombre</th>
+                    <th className="px-4 py-3">Tipo</th>
+                    <th className="px-4 py-3 text-center">% Descuento</th>
+                    <th className="px-4 py-3">RFC</th>
+                    <th className="px-4 py-3">Contacto</th>
+                    <th className="px-4 py-3">Dirección de Entrega</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {clients.map((c) => (
+                    <tr key={c.id}>
+                      <td className="px-4 py-3 font-semibold">{c.nombre}</td>
+                      <td className="px-4 py-3">{c.tipo}</td>
+                      <td className="px-4 py-3 text-center font-bold text-emerald-700">{c.descuento}%</td>
+                      <td className="px-4 py-3">{c.rfc}</td>
+                      <td className="px-4 py-3">{c.contacto} {c.telefono && `(${c.telefono})`}</td>
+                      <td className="px-4 py-3">{c.direccion}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: COTIZADOR */}
+        {activeTab === 'cotizador' && (
+          <div className="bg-white p-8 rounded-xl shadow-sm border max-w-5xl mx-auto space-y-6">
+            <div className="flex justify-between items-start border-b pb-4">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">COTIZACIÓN COMERCIAL — LA PAJARITA</h2>
+                <p className="text-sm text-slate-500">Fecha: {new Date().toLocaleDateString('es-MX')}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <label className="text-xs text-slate-500 block">Folio</label>
+                  <input
+                    type="number"
+                    value={cotFolio}
+                    onChange={(e) => setCotFolio(e.target.value)}
+                    className="border rounded px-2 py-1 w-24 text-right font-bold"
+                  />
+                </div>
+                <button
+                  onClick={() => window.print()}
+                  className="no-print flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800"
+                >
+                  <Printer className="w-4 h-4" /> Imprimir / Guardar PDF
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Cliente / Distribuidor</label>
+                <select
+                  value={cotClientId}
+                  onChange={(e) => setCotClientId(e.target.value)}
+                  className="w-full border rounded-lg p-2 text-sm bg-white"
+                >
+                  <option value="">-- Seleccionar Cliente (0% desc) --</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre} ({c.descuento}% desc)
+                    </option>
+                  ))}
+                </select>
+                {selectedCotClient.direccion && (
+                  <p className="text-xs text-slate-500 mt-1">{selectedCotClient.direccion}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Modalidad de Impresión</label>
+                <select
+                  value={cotImpresion}
+                  onChange={(e) => setCotImpresion(e.target.value)}
+                  className="w-full border rounded-lg p-2 text-sm bg-white font-medium text-emerald-800"
+                >
+                  {MODALIDADES_IMPRESION.map((m) => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Ejecutivo que Cotiza</label>
+                <select
+                  value={cotEjecutivo}
+                  onChange={(e) => setCotEjecutivo(e.target.value)}
+                  className="w-full border rounded-lg p-2 text-sm bg-white"
+                >
+                  {EJECUTIVOS.map((ej) => (
+                    <option key={ej.nombre} value={ej.nombre}>{ej.nombre}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="bg-slate-800 text-white text-xs uppercase">
+                  <th className="p-2.5 text-left">SKU</th>
+                  <th className="p-2.5 text-left">Descripción</th>
+                  <th className="p-2.5 text-center">Paq/Caja</th>
+                  <th className="p-2.5 text-center">Cajas</th>
+                  <th className="p-2.5 text-right">Precio Caja Cotizado</th>
+                  <th className="p-2.5 text-right">Importe</th>
+                  <th className="p-2.5 no-print"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y border">
+                {cotItems.map((row, idx) => {
+                  const prod = inventory.find((p) => p.sku === row.sku);
+                  const unitPrice = calcCotPrice(prod);
+                  const lineTotal = unitPrice * (Number(row.cajas) || 0);
+                  return (
+                    <tr key={idx}>
+                      <td className="p-2">
+                        <select
+                          value={row.sku}
+                          onChange={(e) => {
+                            const updated = [...cotItems];
+                            updated[idx].sku = e.target.value;
+                            setCotItems(updated);
+                          }}
+                          className="border rounded p-1.5 text-sm font-mono w-36"
+                        >
+                          <option value="">Elegir SKU...</option>
+                          {inventory.map((p) => (
+                            <option key={p.sku} value={p.sku}>{p.sku}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="p-2 text-xs">{prod?.descripcion || '-'}</td>
+                      <td className="p-2 text-center">{prod?.pCaja || 0}</td>
+                      <td className="p-2 text-center">
+                        <input
+                          type="number"
+                          min="1"
+                          value={row.cajas}
+                          onChange={(e) => {
+                            const updated = [...cotItems];
+                            updated[idx].cajas = e.target.value;
+                            setCotItems(updated);
+                          }}
+                          className="border rounded p-1 w-20 text-center"
+                        />
+                      </td>
+                      <td className="p-2 text-right font-medium">{formatCurrency(unitPrice)}</td>
+                      <td className="p-2 text-right font-bold">{formatCurrency(lineTotal)}</td>
+                      <td className="p-2 text-center no-print">
+                        <button
+                          onClick={() => setCotItems(cotItems.filter((_, i) => i !== idx))}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <button
+              onClick={() => setCotItems([...cotItems, { sku: '', cajas: 1 }])}
+              className="no-print flex items-center gap-1 text-sm text-emerald-700 font-semibold hover:underline"
+            >
+              <Plus className="w-4 h-4" /> Agregar partida
+            </button>
+
+            <div className="flex flex-col md:flex-row justify-between gap-6 pt-4 border-t">
+              <div className="flex-1 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase text-slate-600 mb-1">Notas y Condiciones</label>
+                  <textarea
+                    rows="3"
+                    value={cotNotas}
+                    onChange={(e) => setCotNotas(e.target.value)}
+                    className="w-full border rounded-lg p-2 text-xs"
+                  />
+                </div>
+                {/* Firma electrónica debajo de notas */}
+                <div className="pt-2">
+                  <p className="text-xs text-slate-500 mb-1">Atentamente,</p>
+                  {firmaActual?.firmaUrl && (
+                    <img
+                      src={firmaActual.firmaUrl}
+                      alt={`Firma ${firmaActual.nombre}`}
+                      className="h-16 object-contain mb-1"
+                    />
+                  )}
+                  <p className="font-bold text-sm text-slate-900 border-t border-slate-400 inline-block pt-1 pr-8">
+                    {cotEjecutivo}
+                  </p>
+                  <p className="text-xs text-slate-500">Ejecutivo Comercial — La Pajarita</p>
+                </div>
+              </div>
+
+              <div className="w-full md:w-72 bg-slate-50 p-4 rounded-lg border space-y-2 h-fit">
+                <div className="flex justify-between text-sm">
+                  <span>Subtotal:</span>
+                  <span className="font-medium">{formatCurrency(cotSubtotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>IVA (16%):</span>
+                  <span className="font-medium">{formatCurrency(cotIva)}</span>
+                </div>
+                <div className="flex justify-between text-base font-bold border-t pt-2 text-slate-900">
+                  <span>Total MXN:</span>
+                  <span>{formatCurrency(cotTotal)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: NUEVA ORDEN DE PEDIDO */}
+        {activeTab === 'pedido' && (
+          <div className="bg-white p-6 rounded-xl shadow-sm border max-w-6xl mx-auto space-y-6">
+            <div className="flex justify-between items-center border-b pb-4">
+              <div>
+                <h2 className="text-xl font-bold">Solicitud de Pedido a Bodega</h2>
+                <p className="text-xs text-slate-500">Descuenta automáticamente existencias y aplica descuento del distribuidor</p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-slate-500 block">Folio Pedido</span>
+                <span className="text-xl font-bold text-emerald-700">#{ordFolio}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border">
+              <div>
+                <label className="block text-xs font-semibold mb-1">Cliente / Distribuidor *</label>
+                <select
+                  value={ordClientId}
+                  onChange={(e) => setOrdClientId(e.target.value)}
+                  className="w-full border rounded-lg p-2 text-sm bg-white"
+                >
+                  <option value="">-- Seleccionar --</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>{c.nombre} ({c.descuento}% desc)</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">¿Recoge en Bodega?</label>
+                <select
+                  value={ordRecoge}
+                  onChange={(e) => setOrdRecoge(e.target.value)}
+                  className="w-full border rounded-lg p-2 text-sm bg-white"
+                >
+                  <option value="NO">NO (Requiere envío)</option>
+                  <option value="SI">SÍ (Recoge cliente)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1">Ejecutivo Responsable</label>
+                <select
+                  value={ordEjecutivo}
+                  onChange={(e) => setOrdEjecutivo(e.target.value)}
+                  className="w-full border rounded-lg p-2 text-sm bg-white"
+                >
+                  {EJECUTIVOS.map((ej) => (
+                    <option key={ej.nombre} value={ej.nombre}>{ej.nombre}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-100 text-xs uppercase">
+                  <tr>
+                    <th className="p-2 text-left">SKU</th>
+                    <th className="p-2 text-left">Producto</th>
+                    <th className="p-2 text-center">Stock</th>
+                    <th className="p-2 text-center">Cajas</th>
+                    <th className="p-2 text-center">% Desc</th>
+                    <th className="p-2 text-right">Precio Final</th>
+                    <th className="p-2 text-right">Subtotal</th>
+                    <th className="p-2"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {ordItems.map((row, idx) => {
+                    const prod = inventory.find((p) => p.sku === row.sku);
+                    const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedOrdClient?.descuento || 0);
+                    const precioFinal = prod ? (Number(prod.costoCaja) || 0) * (1 - descPct / 100) : 0;
+                    const excede = prod && Number(row.cajas) > Number(prod.stock);
+                    return (
+                      <tr key={idx}>
+                        <td className="p-2">
+                          <select
+                            value={row.sku}
+                            onChange={(e) => {
+                              const up = [...ordItems];
+                              up[idx].sku = e.target.value;
+                              setOrdItems(up);
+                            }}
+                            className="border rounded p-1.5 font-mono text-sm w-36"
+                          >
+                            <option value="">SKU...</option>
+                            {inventory.map((p) => (
+                              <option key={p.sku} value={p.sku}>{p.sku}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-2 text-xs">{prod?.descripcion || '-'}</td>
+                        <td className="p-2 text-center font-semibold">
+                          {prod ? (
+                            <span className={excede ? 'text-red-600' : 'text-emerald-700'}>
+                              {prod.stock} {excede && <AlertTriangle className="w-3.5 h-3.5 inline" />}
+                            </span>
+                          ) : '-'}
+                        </td>
+                        <td className="p-2 text-center">
+                          <input
+                            type="number"
+                            min="1"
+                            value={row.cajas}
+                            onChange={(e) => {
+                              const up = [...ordItems];
+                              up[idx].cajas = e.target.value;
+                              setOrdItems(up);
+                            }}
+                            className="border rounded p-1 w-20 text-center"
+                          />
+                        </td>
+                        <td className="p-2 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={descPct}
+                            onChange={(e) => {
+                              const up = [...ordItems];
+                              up[idx].customDesc = e.target.value;
+                              setOrdItems(up);
+                            }}
+                            className="border rounded p-1 w-16 text-center"
+                          />
+                        </td>
+                        <td className="p-2 text-right">{formatCurrency(precioFinal)}</td>
+                        <td className="p-2 text-right font-bold">{formatCurrency(precioFinal * (Number(row.cajas) || 0))}</td>
+                        <td className="p-2 text-center">
+                          <button onClick={() => setOrdItems(ordItems.filter((_, i) => i !== idx))} className="text-red-500">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <button
+              onClick={() => setOrdItems([...ordItems, { sku: '', cajas: 1, customDesc: null }])}
+              className="flex items-center gap-1 text-sm text-emerald-700 font-semibold"
+            >
+              <Plus className="w-4 h-4" /> Agregar SKU al pedido
+            </button>
+
+            <div className="flex flex-col md:flex-row justify-between items-end gap-6 pt-4 border-t">
+              <button
+                onClick={handleConfirmOrder}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold shadow"
+              >
+                <CheckCircle2 className="w-5 h-5" /> Confirmar Pedido y Descontar Inventario
+              </button>
+
+              <div className="w-full md:w-80 bg-slate-50 p-4 rounded-lg border space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Subtotal Productos:</span>
+                  <span>{formatCurrency(ordSubtotal)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span>Costo de Envío (Manual):</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={ordEnvio}
+                    onChange={(e) => setOrdEnvio(e.target.value)}
+                    className="border rounded px-2 py-1 w-28 text-right bg-white"
+                  />
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>IVA (16%):</span>
+                  <span>{formatCurrency(ordIva)}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold border-t pt-2 text-slate-900">
+                  <span>Total Pedido:</span>
+                  <span>{formatCurrency(ordTotal)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: RÉCORD DE PEDIDOS */}
+        {activeTab === 'record' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border">
+              <h2 className="font-bold text-lg">Récord Histórico de Órdenes Confirmadas</h2>
+              <button
+                onClick={() =>
+                  exportToCSV(
+                    'record_pedidos_la_pajarita.csv',
+                    orders.map((o) => ({
+                      Folio: o.folio,
+                      Fecha: o.fecha,
+                      Cliente: o.cliente,
+                      Ejecutivo: o.ejecutivo,
+                      Recoge: o.recogeBodega,
+                      Subtotal: o.subtotal,
+                      Envio: o.envio,
+                      IVA: o.iva,
+                      Total: o.total
+                    }))
+                  )
+                }
+                className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-lg text-sm"
+              >
+                <Download className="w-4 h-4" /> Descargar Récord (CSV / Excel)
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {orders.map((ord) => (
+                <div key={ord.id} className="bg-white p-4 rounded-xl shadow-sm border">
+                  <div className="flex flex-wrap justify-between items-center border-b pb-2 mb-2">
+                    <div>
+                      <span className="font-bold text-emerald-700 mr-3">Pedido #{ord.folio}</span>
+                      <span className="font-semibold">{ord.cliente}</span>
+                      <span className="text-xs text-slate-500 ml-3">{ord.fecha} • Ejecutivo: {ord.ejecutivo}</span>
+                    </div>
+                    <div className="text-right font-bold text-slate-900">
+                      Total: {formatCurrency(ord.total)} <span className="text-xs font-normal text-slate-500">(Envío: {formatCurrency(ord.envio)})</span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-slate-600 space-y-1">
+                    {ord.partidas?.map((p, idx) => (
+                      <div key={idx} className="flex justify-between">
+                        <span><strong>{p.sku}</strong> — {p.descripcion} ({p.cajas} cajas, {p.descuentoPct}% desc)</span>
+                        <span>{formatCurrency(p.subtotal)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {orders.length === 0 && (
+                <p className="text-center text-slate-500 py-8">Aún no hay pedidos registrados en el historial.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Modal Nuevo Producto */}
+      {showProdModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleSaveProduct} className="bg-white rounded-xl p-6 max-w-md w-full space-y-4">
+            <h3 className="font-bold text-lg">Agregar / Actualizar SKU</h3>
+            <input required placeholder="SKU" value={newProd.sku} onChange={(e) => setNewProd({ ...newProd, sku: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <input required placeholder="Descripción" value={newProd.descripcion} onChange={(e) => setNewProd({ ...newProd, descripcion: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs">Stock Inicial (Cajas)</label>
+                <input type="number" value={newProd.stock} onChange={(e) => setNewProd({ ...newProd, stock: e.target.value })} className="w-full border rounded p-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs">Costo Caja Base ($)</label>
+                <input type="number" step="0.01" value={newProd.costoCaja} onChange={(e) => setNewProd({ ...newProd, costoCaja: e.target.value })} className="w-full border rounded p-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs">Unidades / Paquete</label>
+                <input type="number" value={newProd.uPq} onChange={(e) => setNewProd({ ...newProd, uPq: e.target.value })} className="w-full border rounded p-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs">Paquetes / Caja</label>
+                <input type="number" value={newProd.pCaja} onChange={(e) => setNewProd({ ...newProd, pCaja: e.target.value })} className="w-full border rounded p-2 text-sm" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowProdModal(false)} className="px-4 py-2 text-sm border rounded-lg">Cancelar</button>
+              <button type="submit" className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg font-medium">Guardar</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Modal Nuevo Cliente */}
+      {showClientModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleSaveClient} className="bg-white rounded-xl p-6 max-w-md w-full space-y-3">
+            <h3 className="font-bold text-lg">Nuevo Cliente o Distribuidor</h3>
+            <input required placeholder="Razón Social o Nombre" value={newClient.nombre} onChange={(e) => setNewClient({ ...newClient, nombre: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <div className="grid grid-cols-2 gap-3">
+              <select value={newClient.tipo} onChange={(e) => setNewClient({ ...newClient, tipo: e.target.value })} className="border rounded p-2 text-sm">
+                <option value="Distribuidor">Distribuidor</option>
+                <option value="Cliente Directo">Cliente Directo</option>
+              </select>
+              <input type="number" placeholder="% Descuento" value={newClient.descuento} onChange={(e) => setNewClient({ ...newClient, descuento: e.target.value })} className="border rounded p-2 text-sm" />
+            </div>
+            <input placeholder="RFC" value={newClient.rfc} onChange={(e) => setNewClient({ ...newClient, rfc: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <input placeholder="Contacto" value={newClient.contacto} onChange={(e) => setNewClient({ ...newClient, contacto: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <input placeholder="Teléfono" value={newClient.telefono} onChange={(e) => setNewClient({ ...newClient, telefono: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <input placeholder="Dirección de Entrega" value={newClient.direccion} onChange={(e) => setNewClient({ ...newClient, direccion: e.target.value })} className="w-full border rounded p-2 text-sm" />
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowClientModal(false)} className="px-4 py-2 text-sm border rounded-lg">Cancelar</button>
+              <button type="submit" className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg font-medium">Guardar</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
