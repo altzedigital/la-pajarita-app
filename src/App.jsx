@@ -6,14 +6,15 @@ import {
   doc,
   setDoc,
   updateDoc,
-  deleteDoc,
   onSnapshot,
   writeBatch,
   increment
 } from 'firebase/firestore';
 import {
   getAuth,
-  signInAnonymously,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
   onAuthStateChanged
 } from 'firebase/auth';
 import {
@@ -30,7 +31,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Database,
-  Search
+  Search,
+  LogOut
 } from 'lucide-react';
 
 // Configuración oficial de tu proyecto Firebase
@@ -47,6 +49,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const googleProvider = new GoogleAuthProvider();
 
 // Catálogo inicial migrado de tu inventario (39 SKUs)
 const INITIAL_INVENTORY = [
@@ -117,6 +120,7 @@ const formatCurrency = (val) =>
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('inventario');
   const [inventory, setInventory] = useState([]);
   const [clients, setClients] = useState([]);
@@ -124,15 +128,12 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loadingSeed, setLoadingSeed] = useState(false);
 
-  // Estado para nuevo producto
   const [newProd, setNewProd] = useState({ sku: '', descripcion: '', stock: 0, costoCaja: 0, uPq: 0, pCaja: 0 });
   const [showProdModal, setShowProdModal] = useState(false);
 
-  // Estado para nuevo cliente
   const [newClient, setNewClient] = useState({ nombre: '', tipo: 'Distribuidor', descuento: 30, contacto: '', telefono: '', correo: '', rfc: '', direccion: '' });
   const [showClientModal, setShowClientModal] = useState(false);
 
-  // Estado Cotizador
   const [cotFolio, setCotFolio] = useState(1001);
   const [cotClientId, setCotClientId] = useState('');
   const [cotImpresion, setCotImpresion] = useState('sin');
@@ -140,7 +141,6 @@ export default function App() {
   const [cotNotas, setCotNotas] = useState('Precios sujetos a cambio sin previo aviso. Tiempo de entrega sujeto a disponibilidad en bodega.');
   const [cotItems, setCotItems] = useState([{ sku: '', cajas: 1 }]);
 
-  // Estado Orden de Pedido
   const [ordFolio, setOrdFolio] = useState(188);
   const [ordClientId, setOrdClientId] = useState('');
   const [ordRecoge, setOrdRecoge] = useState('NO');
@@ -149,9 +149,23 @@ export default function App() {
   const [ordItems, setOrdItems] = useState([{ sku: '', cajas: 1, customDesc: null }]);
 
   useEffect(() => {
-    signInAnonymously(auth).catch(console.error);
-    return onAuthStateChanged(auth, (u) => setUser(u));
+    return onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setAuthLoading(false);
+    });
   }, []);
+
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      alert('No se pudo iniciar sesión con Google: ' + err.message);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -179,7 +193,6 @@ export default function App() {
     };
   }, [user]);
 
-  // Precargar catálogo inicial en Firestore
   const seedDatabase = async () => {
     setLoadingSeed(true);
     try {
@@ -200,7 +213,6 @@ export default function App() {
     }
   };
 
-  // Importar CSV desde Google Sheets
   const handleCsvUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -230,7 +242,6 @@ export default function App() {
     reader.readAsText(file);
   };
 
-  // Exportar CSV
   const exportToCSV = (filename, rows) => {
     if (!rows.length) return alert('No hay registros para exportar.');
     const headers = Object.keys(rows[0]);
@@ -245,7 +256,6 @@ export default function App() {
     link.click();
   };
 
-  // Ajuste rápido de stock
   const adjustStock = async (item, delta) => {
     const newStock = Math.max(0, (Number(item.stock) || 0) + delta);
     await updateDoc(doc(db, 'inventario', item.id), { stock: newStock });
@@ -279,7 +289,6 @@ export default function App() {
     setShowClientModal(false);
   };
 
-  // Cálculos del Cotizador
   const selectedCotClient = useMemo(
     () => clients.find((c) => c.id === cotClientId) || { nombre: 'Público General', descuento: 0, direccion: '', contacto: '', telefono: '' },
     [clients, cotClientId]
@@ -314,7 +323,6 @@ export default function App() {
   const cotIva = cotSubtotal * 0.16;
   const cotTotal = cotSubtotal + cotIva;
 
-  // Cálculos Orden de Pedido
   const selectedOrdClient = useMemo(
     () => clients.find((c) => c.id === ordClientId) || null,
     [clients, ordClientId]
@@ -370,6 +378,7 @@ export default function App() {
       direccion: selectedOrdClient.direccion || '',
       recogeBodega: ordRecoge,
       ejecutivo: ordEjecutivo,
+      usuarioCorreo: user?.email || '',
       partidas: validLines,
       subtotal: ordSubtotal,
       envio: Number(ordEnvio) || 0,
@@ -390,6 +399,36 @@ export default function App() {
     alert(`Pedido #${ordFolio} confirmado. El stock en bodega se descontó automáticamente.`);
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-600 text-sm">
+        Verificando sesión...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">La Pajarita</h1>
+            <p className="text-sm text-slate-500 mt-1">Sistema Operativo Interno — Inventario, Cotizador y Pedidos</p>
+          </div>
+          <p className="text-xs text-slate-600">
+            Inicia sesión con tu cuenta de Gmail autorizada para acceder a los datos en tiempo real.
+          </p>
+          <button
+            onClick={handleGoogleLogin}
+            className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow transition"
+          >
+            Iniciar sesión con Google (Gmail)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const filteredInventory = inventory.filter(
     (p) =>
       p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -400,14 +439,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
-      {/* Barra superior */}
       <header className="bg-slate-900 text-white px-6 py-4 shadow-md no-print">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold tracking-tight">La Pajarita — Sistema Operativo Interno</h1>
-            <p className="text-xs text-slate-300">Inventario en vivo, Cotizador con Impresión y Órdenes de Pedido</p>
+            <p className="text-xs text-slate-300">Sesión activa: {user.email}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {[
               { id: 'inventario', label: 'Inventario', icon: Package },
               { id: 'clientes', label: 'Distribuidores', icon: Users },
@@ -420,7 +458,7 @@ export default function App() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition ${
                     activeTab === tab.id ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
                   }`}
                 >
@@ -429,12 +467,18 @@ export default function App() {
                 </button>
               );
             })}
+            <button
+              onClick={handleLogout}
+              title="Cerrar sesión"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-red-900/60 hover:bg-red-800 text-red-100"
+            >
+              <LogOut className="w-4 h-4" /> Salir
+            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto p-6">
-        {/* Banner de precarga si Firestore está vacío */}
         {inventory.length === 0 && (
           <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4 no-print">
             <div>
@@ -452,7 +496,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 1: INVENTARIO */}
         {activeTab === 'inventario' && (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-xl shadow-sm border">
@@ -533,7 +576,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: DISTRIBUIDORES */}
         {activeTab === 'clientes' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border">
@@ -582,7 +624,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: COTIZADOR */}
         {activeTab === 'cotizador' && (
           <div className="bg-white p-8 rounded-xl shadow-sm border max-w-5xl mx-auto space-y-6">
             <div className="flex justify-between items-start border-b pb-4">
@@ -740,7 +781,6 @@ export default function App() {
                     className="w-full border rounded-lg p-2 text-xs"
                   />
                 </div>
-                {/* Firma electrónica debajo de notas */}
                 <div className="pt-2">
                   <p className="text-xs text-slate-500 mb-1">Atentamente,</p>
                   {firmaActual?.firmaUrl && (
@@ -775,7 +815,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: NUEVA ORDEN DE PEDIDO */}
         {activeTab === 'pedido' && (
           <div className="bg-white p-6 rounded-xl shadow-sm border max-w-6xl mx-auto space-y-6">
             <div className="flex justify-between items-center border-b pb-4">
@@ -958,7 +997,6 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: RÉCORD DE PEDIDOS */}
         {activeTab === 'record' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border">
@@ -1017,7 +1055,6 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal Nuevo Producto */}
       {showProdModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSaveProduct} className="bg-white rounded-xl p-6 max-w-md w-full space-y-4">
@@ -1050,7 +1087,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal Nuevo Cliente */}
       {showClientModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSaveClient} className="bg-white rounded-xl p-6 max-w-md w-full space-y-3">
