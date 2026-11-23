@@ -51,6 +51,12 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
+// Correos autorizados de tu equipo (proveedor Google)
+const ALLOWED_EMAILS = [
+  'contacto@la-pajarita.com.mx',
+  'eduardo@la-pajarita.com.mx'
+];
+
 // Catálogo inicial migrado de tu inventario (39 SKUs)
 const INITIAL_INVENTORY = [
   { sku: '100BLBANE400', descripcion: 'MI MANTELES 100X100 400 HJS. BALI NEGRO', stock: 0, costoCaja: 0, uPq: 0, pCaja: 0 },
@@ -121,6 +127,7 @@ const formatCurrency = (val) =>
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [accessDeniedMsg, setAccessDeniedMsg] = useState('');
   const [activeTab, setActiveTab] = useState('inventario');
   const [inventory, setInventory] = useState([]);
   const [clients, setClients] = useState([]);
@@ -149,13 +156,26 @@ export default function App() {
   const [ordItems, setOrdItems] = useState([{ sku: '', cajas: 1, customDesc: null }]);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (u) => {
+    return onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        const emailLower = (u.email || '').toLowerCase();
+        const allowedLower = ALLOWED_EMAILS.map((e) => e.toLowerCase());
+        if (!allowedLower.includes(emailLower)) {
+          await signOut(auth);
+          setUser(null);
+          setAccessDeniedMsg(`El correo ${u.email} no está autorizado para usar este sistema.`);
+          setAuthLoading(false);
+          return;
+        }
+        setAccessDeniedMsg('');
+      }
       setUser(u);
       setAuthLoading(false);
     });
   }, []);
 
   const handleGoogleLogin = async () => {
+    setAccessDeniedMsg('');
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
@@ -415,14 +435,19 @@ export default function App() {
             <h1 className="text-2xl font-bold text-slate-900">La Pajarita</h1>
             <p className="text-sm text-slate-500 mt-1">Sistema Operativo Interno — Inventario, Cotizador y Pedidos</p>
           </div>
+          {accessDeniedMsg && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-lg">
+              {accessDeniedMsg}
+            </div>
+          )}
           <p className="text-xs text-slate-600">
-            Inicia sesión con tu cuenta de Gmail autorizada para acceder a los datos en tiempo real.
+            Inicia sesión con tu cuenta autorizada de Google para acceder a los datos en tiempo real.
           </p>
           <button
             onClick={handleGoogleLogin}
             className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow transition"
           >
-            Iniciar sesión con Google (Gmail)
+            Iniciar sesión con Google
           </button>
         </div>
       </div>
