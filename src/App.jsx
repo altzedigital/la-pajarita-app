@@ -38,10 +38,15 @@ import {
   Filter,
   TrendingUp,
   Percent,
-  BarChart3
+  BarChart3,
+  Image as ImageIcon,
+  MessageSquare,
+  CreditCard,
+  X,
+  ClipboardList,
+  ArrowUpRight
 } from 'lucide-react';
 
-// Configuración oficial de tu proyecto Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBsQrX4RUaePouyRQt_Gw8m76_G7Ndf6n8",
   authDomain: "la-pajarita-sistema.firebaseapp.com",
@@ -57,7 +62,6 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
-// Únicos correos con permisos de edición, costos/márgenes, dashboard de ventas y pedidos
 const ADMIN_EMAILS = [
   'contacto@la-pajarita.com.mx',
   'eduardo@la-pajarita.com.mx'
@@ -65,6 +69,7 @@ const ADMIN_EMAILS = [
 
 const toDirectDriveImg = (url) => {
   if (!url) return '';
+  if (url.startsWith('data:image')) return url;
   const match = url.match(/\/d\/([^/]+)|id=([^&]+)/);
   const fileId = match ? (match[1] || match[2]) : null;
   return fileId ? `https://lh3.googleusercontent.com/d/${fileId}` : url;
@@ -72,47 +77,46 @@ const toDirectDriveImg = (url) => {
 
 const LOGO_LA_PAJARITA_URL = 'https://drive.google.com/file/d/1Kutnzqe7wWMXIowoS7bpeiPO5nJT9K4K/view?usp=drive_link';
 
-// Catálogo inicial migrado de "Inventario actualizado - Inventario a utilizar para cotizaciones___.csv"
 const INITIAL_INVENTORY = [
-  { sku: '100BLBANE400', descripcion: 'MI MANTELES 100X100 400 HJS. BALI NEGRO', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
-  { sku: '20AI2T', descripcion: 'SERV 20X20 AIRLAID 20 PAQ DE 70 HJS. BLANCO', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
-  { sku: '20AZM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC AZUL MAR 20PQ.100H. PLEGADO 1/4', stock: 82, precioPaq: 973.49, costoCaja: 973.49, costoUnidad: 9.73, uPq: 100, pCaja: 1, totalProdCaja: 100, cPalet: 24, volumen: 0.0085, peso: 0.05, costoAdquisicion: 681.44 },
-  { sku: '20BLM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC 20PQ.100H. BLANCO PLEGADO 1/4', stock: 24, precioPaq: 973.49, costoCaja: 973.49, costoUnidad: 9.73, uPq: 100, pCaja: 1, totalProdCaja: 100, cPalet: 24, volumen: 0.0085, peso: 0.05, costoAdquisicion: 681.44 },
-  { sku: '20GOM/20PG', descripcion: 'PAQ. SERV. 20x20 MICROPUNTO GO GREEN PAPEL RECICLADO 20 PQ.100H PLEGADO 1/4', stock: 75, precioPaq: 66.12, costoCaja: 1322.33, costoUnidad: 0.66, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 60, volumen: 0.0013, peso: 3.6, costoAdquisicion: 925.63 },
-  { sku: '20NEM/20PNE', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PUNTA-PUNTA PAPEL BASIC 32PQ.100H. NEGRA PLEGADO 1/4', stock: 14, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.87, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1215.81 },
-  { sku: '20PAZ', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA DE PAPEL BASIC AZUL 32PQ.100H. PLEGADO 1/4', stock: 3, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.87, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 38, volumen: 0.0001, peso: 0.055, costoAdquisicion: 1215.81 },
-  { sku: '20PBL', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA DE PAPEL BASIC BLANCA 32PQ.100H. PLEGADO 1/4', stock: 39, precioPaq: 41.32, costoCaja: 1322.33, costoUnidad: 0.41, uPq: 100, pCaja: 32, totalProdCaja: 3200, cPalet: 38, volumen: 0.0013, peso: 3.4, costoAdquisicion: 925.63 },
-  { sku: '20PBLI2T', descripcion: 'PAQ. SERV. 20X20 PUNTA BCA 48 PAQ DE 100 HJS.', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 100, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
-  { sku: '20PG', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA GO GREEN PAPEL RECICLADO 32PQ.100H. PLEGADO 1/4', stock: 33, precioPaq: 41.32, costoCaja: 1322.33, costoUnidad: 0.41, uPq: 100, pCaja: 32, totalProdCaja: 3200, cPalet: 38, volumen: 0.0022, peso: 3.4, costoAdquisicion: 925.63 },
-  { sku: '20PNE', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA PAPEL BASIC NEGRO 32PQ.100H. PLEGADO 1/4', stock: 33, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.87, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1215.81 },
-  { sku: '20PNEI', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA NEGRO IMPRESO 1 TINTA 48 PQ. 100', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 100, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
-  { sku: '20PNEPA', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA NEGRO 20PQ.120H. PLEGADO AMERICANO', stock: 3, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.72, uPq: 120, pCaja: 20, totalProdCaja: 2400, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1215.81 },
-  { sku: '20ROM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC ROJO 20 PQ.100H. PLEGADO 1/4', stock: 90, precioPaq: 108.55, costoCaja: 1736.87, costoUnidad: 1.09, uPq: 100, pCaja: 16, totalProdCaja: 1600, cPalet: 38, volumen: 0.0022, peso: 3.6, costoAdquisicion: 1215.81 },
-  { sku: '20VOM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC VERDE OSCURO 20PQ.100H. PLEGADO 1/4', stock: 56, precioPaq: 108.55, costoCaja: 1736.87, costoUnidad: 1.09, uPq: 100, pCaja: 16, totalProdCaja: 1600, cPalet: 38, volumen: 0.0022, peso: 3.4, costoAdquisicion: 1215.81 },
-  { sku: '2535ago', descripcion: 'MANTELES 25X35 AIRLAID GO GREEN 800 UD.', stock: 70, precioPaq: 2785.39, costoCaja: 2785.39, costoUnidad: 3.48, uPq: 800, pCaja: 1, totalProdCaja: 800, cPalet: 24, volumen: 0.0022, peso: 2.9, costoAdquisicion: 1949.77 },
-  { sku: '2535ANE', descripcion: 'MANTELES 25X35 AIRLAID NEGRO 800 UD.', stock: 71, precioPaq: 201.97, costoCaja: 4039.35, costoUnidad: 5.05, uPq: 800, pCaja: 20, totalProdCaja: 16000, cPalet: 24, volumen: 0.0022, peso: 2.8, costoAdquisicion: 2827.55 },
-  { sku: '2535FAZ50', descripcion: 'MIL MANTELES 25x35 50 GR. BLANCO+AZUL', stock: 46, precioPaq: 204.88, costoCaja: 2458.56, costoUnidad: 0.2, uPq: 1000, pCaja: 12, totalProdCaja: 12000, cPalet: 24, volumen: 0.0022, peso: 1.8, costoAdquisicion: 1720.99 },
-  { sku: '2535FNE50', descripcion: 'MIL MANTELES 25x35 50 GR. BLANCO+NEGRO', stock: 47, precioPaq: 102.44, costoCaja: 2458.56, costoUnidad: 0.1, uPq: 1000, pCaja: 24, totalProdCaja: 24000, cPalet: 24, volumen: 0.0022, peso: 1.8, costoAdquisicion: 1720.99 },
-  { sku: '2535FRO50', descripcion: 'MIL MANTELES 25x35 50 GR. ROJO BLANCO+ROJO', stock: 46, precioPaq: 102.44, costoCaja: 2458.56, costoUnidad: 0.1, uPq: 1000, pCaja: 24, totalProdCaja: 24000, cPalet: 24, volumen: 0.0022, peso: 1.8, costoAdquisicion: 1720.99 },
-  { sku: '25PBL', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL BASIC BLANCA 63 PQ. 50 H. PLEGADO 1/4', stock: 0, precioPaq: 89.56, costoCaja: 1791.23, costoUnidad: 1.79, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0013, peso: 2.8, costoAdquisicion: 1253.86 },
-  { sku: '25PBLI', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA BLANCO', stock: 24, precioPaq: 89.56, costoCaja: 1791.23, costoUnidad: 1.79, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0022, peso: 2.7, costoAdquisicion: 1253.86 },
-  { sku: '25PG', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 63 PQ. 50 H. PLEGADO 1/4', stock: 55, precioPaq: 93.76, costoCaja: 1875.27, costoUnidad: 1.88, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0022, peso: 2.8, costoAdquisicion: 1312.69 },
-  { sku: '25PNE', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL BASIC NEGRO 63 PQ. 50 H. PLEGADO 1/4', stock: 0, precioPaq: 204.85, costoCaja: 2458.23, costoUnidad: 4.1, uPq: 50, pCaja: 12, totalProdCaja: 600, cPalet: 38, volumen: 0.0013, peso: 2.8, costoAdquisicion: 1720.76 },
-  { sku: '3040PBL', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA PAPEL BASIC BLANCA 48PQ. PAQ. 50 H. PLEGADO 1/6', stock: 0, precioPaq: 42.02, costoCaja: 2017.01, costoUnidad: 0.84, uPq: 50, pCaja: 48, totalProdCaja: 2400, cPalet: 38, volumen: 0.0022, peso: 3.1, costoAdquisicion: 1411.91 },
-  { sku: '3040PBLI2T', descripcion: 'PAQ. SERV. 30X40 PUNTA BCA 24 PAQ DE 50 HJS.', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
-  { sku: '3040PBLNAAZ', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES AZUL 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 1, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42 },
-  { sku: '3040PBLNANE', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES NEGRO 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 38, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42 },
-  { sku: '3040PBLNARO', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES ROJO 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 37, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42 },
-  { sku: '3040PBLNAVE', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES VERDE 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 1, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42 },
-  { sku: '3040PG', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 48 PQ. PAQ. 50 H. PLEGADO 1/6', stock: 142, precioPaq: 98.85, costoCaja: 1976.99, costoUnidad: 1.98, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0022, peso: 3.2, costoAdquisicion: 1383.89 },
-  { sku: '332GTRNE', descripcion: 'PAQ. SERV. 33x33 2/C PUNTA-PUNTA PAPEL RECICLADO GO GREEN TRIPOLI NEGRO 42PQ. 100 H. PLEGADO 1/4', stock: 37, precioPaq: 68.08, costoCaja: 3267.63, costoUnidad: 0.68, uPq: 100, pCaja: 48, totalProdCaja: 4800, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 2287.34 },
-  { sku: '4020PBL', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC BLANCA 16PQ.100H. PLEGADO 1/4', stock: 57, precioPaq: 475.07, costoCaja: 950.14, costoUnidad: 4.75, uPq: 100, pCaja: 2, totalProdCaja: 200, cPalet: 38, volumen: 0.0013, peso: 3.1, costoAdquisicion: 665.1 },
-  { sku: '4020PBU', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC BURDEOS 16PQ.100H. PLEGADO 1/4', stock: 3, precioPaq: 66.34, costoCaja: 1592.13, costoUnidad: 0.66, uPq: 100, pCaja: 24, totalProdCaja: 2400, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1114.49 },
-  { sku: '4020PG', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 16PQ.100H. PLEGADO 1/4', stock: 17, precioPaq: 475.07, costoCaja: 950.14, costoUnidad: 4.75, uPq: 100, pCaja: 2, totalProdCaja: 200, cPalet: 38, volumen: 0.0022, peso: 3.2, costoAdquisicion: 665.1 },
-  { sku: '4020PNE', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC NEGRO 16PQ.100H. PLEGADO 1/4', stock: 21, precioPaq: 66.34, costoCaja: 1592.13, costoUnidad: 0.66, uPq: 100, pCaja: 24, totalProdCaja: 2400, cPalet: 38, volumen: 0.0013, peso: 3.1, costoAdquisicion: 1114.49 },
-  { sku: '4032AKBLA', descripcion: 'PAQ. SERV. 40x32 AIRLAID BASIC BLANCO 20P.40 UND. PLEGADO KANGAROO', stock: 88, precioPaq: 130.6, costoCaja: 2611.97, costoUnidad: 3.26, uPq: 40, pCaja: 20, totalProdCaja: 800, cPalet: 38, volumen: 0.0013, peso: 2.9, costoAdquisicion: 1828.38 },
-  { sku: '4032AKBLI', descripcion: 'PAQ. SERV. 40x32 AIRLAID KANGAROO 20P.40 UND. BLANCO IMPRESO (Confirmar Precio)', stock: 0, precioPaq: 108.83, costoCaja: 2611.97, costoUnidad: 2.72, uPq: 40, pCaja: 24, totalProdCaja: 960, cPalet: 24, volumen: 0.0013, peso: 2.8, costoAdquisicion: 1828.38 },
-  { sku: '4032PKNE', descripcion: 'SERV PUNTA COLOR CANGURO NEGRO P/40 C-24', stock: 86, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 40, pCaja: 24, totalProdCaja: 960, cPalet: 24, volumen: 0.0013, peso: 2.9, costoAdquisicion: 0 }
+  { sku: '100BLBANE400', descripcion: 'MI MANTELES 100X100 400 HJS. BALI NEGRO', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0, fotoUrl: '' },
+  { sku: '20AI2T', descripcion: 'SERV 20X20 AIRLAID 20 PAQ DE 70 HJS. BLANCO', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0, fotoUrl: '' },
+  { sku: '20AZM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC AZUL MAR 20PQ.100H. PLEGADO 1/4', stock: 82, precioPaq: 973.49, costoCaja: 973.49, costoUnidad: 9.73, uPq: 100, pCaja: 1, totalProdCaja: 100, cPalet: 24, volumen: 0.0085, peso: 0.05, costoAdquisicion: 681.44, fotoUrl: '' },
+  { sku: '20BLM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC 20PQ.100H. BLANCO PLEGADO 1/4', stock: 24, precioPaq: 973.49, costoCaja: 973.49, costoUnidad: 9.73, uPq: 100, pCaja: 1, totalProdCaja: 100, cPalet: 24, volumen: 0.0085, peso: 0.05, costoAdquisicion: 681.44, fotoUrl: '' },
+  { sku: '20GOM/20PG', descripcion: 'PAQ. SERV. 20x20 MICROPUNTO GO GREEN PAPEL RECICLADO 20 PQ.100H PLEGADO 1/4', stock: 75, precioPaq: 66.12, costoCaja: 1322.33, costoUnidad: 0.66, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 60, volumen: 0.0013, peso: 3.6, costoAdquisicion: 925.63, fotoUrl: '' },
+  { sku: '20NEM/20PNE', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PUNTA-PUNTA PAPEL BASIC 32PQ.100H. NEGRA PLEGADO 1/4', stock: 14, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.87, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1215.81, fotoUrl: '' },
+  { sku: '20PAZ', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA DE PAPEL BASIC AZUL 32PQ.100H. PLEGADO 1/4', stock: 3, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.87, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 38, volumen: 0.0001, peso: 0.055, costoAdquisicion: 1215.81, fotoUrl: '' },
+  { sku: '20PBL', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA DE PAPEL BASIC BLANCA 32PQ.100H. PLEGADO 1/4', stock: 39, precioPaq: 41.32, costoCaja: 1322.33, costoUnidad: 0.41, uPq: 100, pCaja: 32, totalProdCaja: 3200, cPalet: 38, volumen: 0.0013, peso: 3.4, costoAdquisicion: 925.63, fotoUrl: '' },
+  { sku: '20PBLI2T', descripcion: 'PAQ. SERV. 20X20 PUNTA BCA 48 PAQ DE 100 HJS.', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 100, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0, fotoUrl: '' },
+  { sku: '20PG', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA GO GREEN PAPEL RECICLADO 32PQ.100H. PLEGADO 1/4', stock: 33, precioPaq: 41.32, costoCaja: 1322.33, costoUnidad: 0.41, uPq: 100, pCaja: 32, totalProdCaja: 3200, cPalet: 38, volumen: 0.0022, peso: 3.4, costoAdquisicion: 925.63, fotoUrl: '' },
+  { sku: '20PNE', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA PAPEL BASIC NEGRO 32PQ.100H. PLEGADO 1/4', stock: 33, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.87, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1215.81, fotoUrl: '' },
+  { sku: '20PNEI', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA NEGRO IMPRESO 1 TINTA 48 PQ. 100', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 100, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0, fotoUrl: '' },
+  { sku: '20PNEPA', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA NEGRO 20PQ.120H. PLEGADO AMERICANO', stock: 3, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.72, uPq: 120, pCaja: 20, totalProdCaja: 2400, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1215.81, fotoUrl: '' },
+  { sku: '20ROM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC ROJO 20 PQ.100H. PLEGADO 1/4', stock: 90, precioPaq: 108.55, costoCaja: 1736.87, costoUnidad: 1.09, uPq: 100, pCaja: 16, totalProdCaja: 1600, cPalet: 38, volumen: 0.0022, peso: 3.6, costoAdquisicion: 1215.81, fotoUrl: '' },
+  { sku: '20VOM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC VERDE OSCURO 20PQ.100H. PLEGADO 1/4', stock: 56, precioPaq: 108.55, costoCaja: 1736.87, costoUnidad: 1.09, uPq: 100, pCaja: 16, totalProdCaja: 1600, cPalet: 38, volumen: 0.0022, peso: 3.4, costoAdquisicion: 1215.81, fotoUrl: '' },
+  { sku: '2535ago', descripcion: 'MANTELES 25X35 AIRLAID GO GREEN 800 UD.', stock: 70, precioPaq: 2785.39, costoCaja: 2785.39, costoUnidad: 3.48, uPq: 800, pCaja: 1, totalProdCaja: 800, cPalet: 24, volumen: 0.0022, peso: 2.9, costoAdquisicion: 1949.77, fotoUrl: '' },
+  { sku: '2535ANE', descripcion: 'MANTELES 25X35 AIRLAID NEGRO 800 UD.', stock: 71, precioPaq: 201.97, costoCaja: 4039.35, costoUnidad: 5.05, uPq: 800, pCaja: 20, totalProdCaja: 16000, cPalet: 24, volumen: 0.0022, peso: 2.8, costoAdquisicion: 2827.55, fotoUrl: '' },
+  { sku: '2535FAZ50', descripcion: 'MIL MANTELES 25x35 50 GR. BLANCO+AZUL', stock: 46, precioPaq: 204.88, costoCaja: 2458.56, costoUnidad: 0.2, uPq: 1000, pCaja: 12, totalProdCaja: 12000, cPalet: 24, volumen: 0.0022, peso: 1.8, costoAdquisicion: 1720.99, fotoUrl: '' },
+  { sku: '2535FNE50', descripcion: 'MIL MANTELES 25x35 50 GR. BLANCO+NEGRO', stock: 47, precioPaq: 102.44, costoCaja: 2458.56, costoUnidad: 0.1, uPq: 1000, pCaja: 24, totalProdCaja: 24000, cPalet: 24, volumen: 0.0022, peso: 1.8, costoAdquisicion: 1720.99, fotoUrl: '' },
+  { sku: '2535FRO50', descripcion: 'MIL MANTELES 25x35 50 GR. ROJO BLANCO+ROJO', stock: 46, precioPaq: 102.44, costoCaja: 2458.56, costoUnidad: 0.1, uPq: 1000, pCaja: 24, totalProdCaja: 24000, cPalet: 24, volumen: 0.0022, peso: 1.8, costoAdquisicion: 1720.99, fotoUrl: '' },
+  { sku: '25PBL', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL BASIC BLANCA 63 PQ. 50 H. PLEGADO 1/4', stock: 0, precioPaq: 89.56, costoCaja: 1791.23, costoUnidad: 1.79, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0013, peso: 2.8, costoAdquisicion: 1253.86, fotoUrl: '' },
+  { sku: '25PBLI', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA BLANCO', stock: 24, precioPaq: 89.56, costoCaja: 1791.23, costoUnidad: 1.79, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0022, peso: 2.7, costoAdquisicion: 1253.86, fotoUrl: '' },
+  { sku: '25PG', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 63 PQ. 50 H. PLEGADO 1/4', stock: 55, precioPaq: 93.76, costoCaja: 1875.27, costoUnidad: 1.88, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0022, peso: 2.8, costoAdquisicion: 1312.69, fotoUrl: '' },
+  { sku: '25PNE', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL BASIC NEGRO 63 PQ. 50 H. PLEGADO 1/4', stock: 0, precioPaq: 204.85, costoCaja: 2458.23, costoUnidad: 4.1, uPq: 50, pCaja: 12, totalProdCaja: 600, cPalet: 38, volumen: 0.0013, peso: 2.8, costoAdquisicion: 1720.76, fotoUrl: '' },
+  { sku: '3040PBL', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA PAPEL BASIC BLANCA 48PQ. PAQ. 50 H. PLEGADO 1/6', stock: 0, precioPaq: 42.02, costoCaja: 2017.01, costoUnidad: 0.84, uPq: 50, pCaja: 48, totalProdCaja: 2400, cPalet: 38, volumen: 0.0022, peso: 3.1, costoAdquisicion: 1411.91, fotoUrl: '' },
+  { sku: '3040PBLI2T', descripcion: 'PAQ. SERV. 30X40 PUNTA BCA 24 PAQ DE 50 HJS.', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0, fotoUrl: '' },
+  { sku: '3040PBLNAAZ', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES AZUL 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 1, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42, fotoUrl: '' },
+  { sku: '3040PBLNANE', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES NEGRO 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 38, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42, fotoUrl: '' },
+  { sku: '3040PBLNARO', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES ROJO 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 37, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42, fotoUrl: '' },
+  { sku: '3040PBLNAVE', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES VERDE 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 1, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42, fotoUrl: '' },
+  { sku: '3040PG', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 48 PQ. PAQ. 50 H. PLEGADO 1/6', stock: 142, precioPaq: 98.85, costoCaja: 1976.99, costoUnidad: 1.98, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0022, peso: 3.2, costoAdquisicion: 1383.89, fotoUrl: '' },
+  { sku: '332GTRNE', descripcion: 'PAQ. SERV. 33x33 2/C PUNTA-PUNTA PAPEL RECICLADO GO GREEN TRIPOLI NEGRO 42PQ. 100 H. PLEGADO 1/4', stock: 37, precioPaq: 68.08, costoCaja: 3267.63, costoUnidad: 0.68, uPq: 100, pCaja: 48, totalProdCaja: 4800, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 2287.34, fotoUrl: '' },
+  { sku: '4020PBL', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC BLANCA 16PQ.100H. PLEGADO 1/4', stock: 57, precioPaq: 475.07, costoCaja: 950.14, costoUnidad: 4.75, uPq: 100, pCaja: 2, totalProdCaja: 200, cPalet: 38, volumen: 0.0013, peso: 3.1, costoAdquisicion: 665.1, fotoUrl: '' },
+  { sku: '4020PBU', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC BURDEOS 16PQ.100H. PLEGADO 1/4', stock: 3, precioPaq: 66.34, costoCaja: 1592.13, costoUnidad: 0.66, uPq: 100, pCaja: 24, totalProdCaja: 2400, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1114.49, fotoUrl: '' },
+  { sku: '4020PG', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 16PQ.100H. PLEGADO 1/4', stock: 17, precioPaq: 475.07, costoCaja: 950.14, costoUnidad: 4.75, uPq: 100, pCaja: 2, totalProdCaja: 200, cPalet: 38, volumen: 0.0022, peso: 3.2, costoAdquisicion: 665.1, fotoUrl: '' },
+  { sku: '4020PNE', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC NEGRO 16PQ.100H. PLEGADO 1/4', stock: 21, precioPaq: 66.34, costoCaja: 1592.13, costoUnidad: 0.66, uPq: 100, pCaja: 24, totalProdCaja: 2400, cPalet: 38, volumen: 0.0013, peso: 3.1, costoAdquisicion: 1114.49, fotoUrl: '' },
+  { sku: '4032AKBLA', descripcion: 'PAQ. SERV. 40x32 AIRLAID BASIC BLANCO 20P.40 UND. PLEGADO KANGAROO', stock: 88, precioPaq: 130.6, costoCaja: 2611.97, costoUnidad: 3.26, uPq: 40, pCaja: 20, totalProdCaja: 800, cPalet: 38, volumen: 0.0013, peso: 2.9, costoAdquisicion: 1828.38, fotoUrl: '' },
+  { sku: '4032AKBLI', descripcion: 'PAQ. SERV. 40x32 AIRLAID KANGAROO 20P.40 UND. BLANCO IMPRESO (Confirmar Precio)', stock: 0, precioPaq: 108.83, costoCaja: 2611.97, costoUnidad: 2.72, uPq: 40, pCaja: 24, totalProdCaja: 960, cPalet: 24, volumen: 0.0013, peso: 2.8, costoAdquisicion: 1828.38, fotoUrl: '' },
+  { sku: '4032PKNE', descripcion: 'SERV PUNTA COLOR CANGURO NEGRO P/40 C-24', stock: 86, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 40, pCaja: 24, totalProdCaja: 960, cPalet: 24, volumen: 0.0013, peso: 2.9, costoAdquisicion: 0, fotoUrl: '' }
 ];
 
 const INITIAL_CLIENTS = [
@@ -205,6 +209,13 @@ const parseCsvLine = (line) => {
   return result;
 };
 
+const readImageFileAsDataUrl = (file, cb) => {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => cb(String(ev.target?.result || ''));
+  reader.readAsDataURL(file);
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -214,6 +225,7 @@ export default function App() {
   const [clients, setClients] = useState([]);
   const [ejecutivos, setEjecutivos] = useState(INITIAL_EJECUTIVOS);
   const [orders, setOrders] = useState([]);
+  const [nextAvailableFolio, setNextAvailableFolio] = useState(188);
   const [loadingSeed, setLoadingSeed] = useState(false);
 
   // Filtros globales
@@ -223,17 +235,28 @@ export default function App() {
 
   // Filtros Dashboard de Ventas
   const todayStr = new Date().toISOString().split('T')[0];
-  const [salesMode, setSalesMode] = useState('mensual'); // 'mensual' | 'anual'
+  const [salesMode, setSalesMode] = useState('mensual');
   const [salesYear, setSalesYear] = useState(String(new Date().getFullYear()));
   const [salesMonth, setSalesMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
-  const [reportType, setReportType] = useState('general'); // 'general' | 'distribuidor' | 'vendedor'
+  const [reportType, setReportType] = useState('general');
   const [selectedDistributorReport, setSelectedDistributorReport] = useState('Todos');
   const [selectedSellerReport, setSelectedSellerReport] = useState('Todos');
+
+  // Historial por Cliente seleccionado
+  const [selectedHistoryClient, setSelectedHistoryClient] = useState('');
+
+  // Modal edición de pedido (Comentarios + Info de Pago privada para admins)
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [editComentarios, setEditComentarios] = useState('');
+  const [editFacturado, setEditFacturado] = useState('No');
+  const [editNumFactura, setEditNumFactura] = useState('');
+  const [editPagado, setEditPagado] = useState('No');
+  const [editNumComplemento, setEditNumComplemento] = useState('');
 
   // Modales Admin
   const [newProd, setNewProd] = useState({
     sku: '', descripcion: '', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0,
-    uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0
+    uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0, fotoUrl: ''
   });
   const [showProdModal, setShowProdModal] = useState(false);
 
@@ -243,7 +266,7 @@ export default function App() {
   const [newEjec, setNewEjec] = useState({ nombre: '', firmaUrl: '' });
   const [showEjecModal, setShowEjecModal] = useState(false);
 
-  // Estado Cotizador (con fecha editable igual que Pedido)
+  // Estado Cotizador (incluye foto de referencia opcional por partida)
   const [cotFolio, setCotFolio] = useState(1001);
   const [cotFecha, setCotFecha] = useState(todayStr);
   const [cotClientId, setCotClientId] = useState('');
@@ -255,7 +278,7 @@ export default function App() {
   const [cotImpresion, setCotImpresion] = useState('sin');
   const [cotEjecutivoId, setCotEjecutivoId] = useState('marijose');
   const [cotNotas, setCotNotas] = useState(DEFAULT_NOTAS);
-  const [cotItems, setCotItems] = useState([{ sku: '', unidadVenta: 'caja', cantidad: 1 }]);
+  const [cotItems, setCotItems] = useState([{ sku: '', unidadVenta: 'caja', cantidad: 1, fotoRef: '' }]);
 
   // Estado Orden de Pedido
   const [ordFolio, setOrdFolio] = useState(188);
@@ -298,7 +321,11 @@ export default function App() {
       setInventory(list);
     });
     const unsubCli = onSnapshot(collection(db, 'clientes'), (snap) => {
-      setClients(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setClients(list);
+      if (list.length > 0 && !selectedHistoryClient) {
+        setSelectedHistoryClient(list[0].nombre);
+      }
     });
     const unsubEjec = onSnapshot(collection(db, 'ejecutivos'), (snap) => {
       if (!snap.empty) {
@@ -311,10 +338,10 @@ export default function App() {
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         list.sort((a, b) => (b.folio || 0) - (a.folio || 0));
         setOrders(list);
-        if (list.length > 0) {
-          const maxFolio = Math.max(...list.map((o) => Number(o.folio) || 187));
-          setOrdFolio(maxFolio + 1);
-        }
+        const folios = list.map((o) => Number(o.folio) || 0).filter((n) => n > 0);
+        const nextF = folios.length > 0 ? Math.max(...folios) + 1 : 188;
+        setNextAvailableFolio(nextF);
+        setOrdFolio(nextF);
       });
     }
     return () => {
@@ -359,7 +386,7 @@ export default function App() {
         batch.set(doc(db, 'ejecutivos', ej.id), ej);
       });
       await batch.commit();
-      alert('Catálogo de 129 SKUs, distribuidores y las 5 firmas cargados en Firebase.');
+      alert('Catálogo inicial, distribuidores y las 5 firmas cargados en Firebase.');
     } catch (e) {
       alert('Error al cargar datos iniciales: ' + e.message);
     } finally {
@@ -367,7 +394,6 @@ export default function App() {
     }
   };
 
-  // Importación segura usando los títulos de tu CSV y sin alterar otros datos
   const handleCsvUpload = (e) => {
     if (!isAdmin) return;
     const file = e.target.files?.[0];
@@ -379,7 +405,6 @@ export default function App() {
       const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
       if (lines.length < 2) return alert('El archivo CSV está vacío.');
 
-      // Busca la fila que contenga 'sku' como encabezado (útil si tiene filas superiores de búsqueda)
       let headerRowIdx = lines.findIndex((l) => {
         const cols = parseCsvLine(l).map((c) => c.toLowerCase().trim());
         return cols.includes('sku');
@@ -454,7 +479,8 @@ export default function App() {
             cPalet,
             volumen,
             peso,
-            costoAdquisicion
+            costoAdquisicion,
+            fotoUrl: existing?.fotoUrl || ''
           },
           { merge: true }
         );
@@ -488,6 +514,11 @@ export default function App() {
     await updateDoc(doc(db, 'inventario', item.id), { stock: newStock });
   };
 
+  const handleUpdateSkuFoto = async (item, fotoUrl) => {
+    if (!isAdmin) return;
+    await updateDoc(doc(db, 'inventario', item.id), { fotoUrl });
+  };
+
   const handleUpdateAdquisicion = async (item, nuevoCostoAdq) => {
     if (!isAdmin) return;
     await updateDoc(doc(db, 'inventario', item.id), {
@@ -519,7 +550,7 @@ export default function App() {
     });
     setNewProd({
       sku: '', descripcion: '', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0,
-      uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0
+      uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0, fotoUrl: ''
     });
     setShowProdModal(false);
   };
@@ -545,12 +576,22 @@ export default function App() {
     setShowEjecModal(false);
   };
 
+  // Eliminar pedido: si era el último folio creado, reutiliza ese número para el siguiente pedido;
+  // si ya existen folios posteriores, solo devuelve stock y elimina el registro.
   const handleDeleteOrder = async (order) => {
     if (!isAdmin) return;
-    const confirmar = window.confirm(
-      `¿Seguro que deseas eliminar el Pedido #${order.folio} de "${order.cliente}"? Se regresarán las cajas al stock del inventario.`
-    );
-    if (!confirmar) return;
+    const deletedFolio = Number(order.folio) || 0;
+    const otherFolios = orders
+      .filter((o) => o.id !== order.id)
+      .map((o) => Number(o.folio) || 0);
+    const maxOtherFolio = otherFolios.length > 0 ? Math.max(...otherFolios) : 187;
+    const isLatestOrder = deletedFolio > 0 && deletedFolio > maxOtherFolio;
+
+    const mensaje = isLatestOrder
+      ? `¿Eliminar el Pedido #${deletedFolio} (último creado)? Se regresará el stock y el siguiente pedido tomará el folio #${deletedFolio}.`
+      : `¿Eliminar el Pedido #${deletedFolio}? Ya existen pedidos posteriores, por lo que se regresará el stock y el consecutivo seguirá normal.`;
+
+    if (!window.confirm(mensaje)) return;
 
     try {
       const batch = writeBatch(db);
@@ -569,10 +610,37 @@ export default function App() {
       }
       batch.delete(doc(db, 'pedidos', order.id));
       await batch.commit();
-      alert(`Pedido #${order.folio} eliminado y stock devuelto al inventario.`);
+
+      const nextF = isLatestOrder && deletedFolio > 0 ? deletedFolio : maxOtherFolio + 1;
+      setNextAvailableFolio(nextF);
+      setOrdFolio(nextF);
+      alert(`Pedido #${deletedFolio} eliminado y stock devuelto al inventario.`);
     } catch (err) {
       alert('Error al eliminar el pedido: ' + err.message);
     }
+  };
+
+  // Abrir modal de edición al hacer clic en un pedido
+  const openEditOrderModal = (ord) => {
+    setEditingOrder(ord);
+    setEditComentarios(ord.comentarios || '');
+    setEditFacturado(ord.facturado || 'No');
+    setEditNumFactura(ord.numFactura || '');
+    setEditPagado(ord.pagado || 'No');
+    setEditNumComplemento(ord.numComplemento || '');
+  };
+
+  const handleSaveOrderDetails = async (e) => {
+    e.preventDefault();
+    if (!isAdmin || !editingOrder) return;
+    await updateDoc(doc(db, 'pedidos', editingOrder.id), {
+      comentarios: editComentarios,
+      facturado: editFacturado,
+      numFactura: editNumFactura,
+      pagado: editPagado,
+      numComplemento: editNumComplemento
+    });
+    setEditingOrder(null);
   };
 
   const filteredInventory = useMemo(() => {
@@ -587,6 +655,59 @@ export default function App() {
       return matchText && matchSize && matchMat;
     });
   }, [inventory, searchTerm, filterSize, filterMaterial]);
+
+  // Historial de productos por cliente/distribuidor
+  const clientProductHistory = useMemo(() => {
+    if (!selectedHistoryClient) return [];
+    const prodMap = {};
+    orders
+      .filter((o) => o.cliente === selectedHistoryClient)
+      .forEach((o) => {
+        (o.partidas || []).forEach((line) => {
+          const key = line.sku;
+          if (!prodMap[key]) {
+            prodMap[key] = {
+              sku: line.sku,
+              descripcion: line.descripcion,
+              totalCajas: 0,
+              vecesPedido: 0,
+              ultimaFecha: o.fecha || '',
+              ultimoPrecio: line.precioFinal || 0
+            };
+          }
+          prodMap[key].totalCajas += Number(line.cajas) || 0;
+          prodMap[key].vecesPedido += 1;
+          if ((o.fecha || '') >= (prodMap[key].ultimaFecha || '')) {
+            prodMap[key].ultimaFecha = o.fecha || '';
+            prodMap[key].ultimoPrecio = line.precioFinal || 0;
+          }
+        });
+      });
+    return Object.values(prodMap).sort((a, b) => b.totalCajas - a.totalCajas);
+  }, [orders, selectedHistoryClient]);
+
+  const loadClientHistoryIntoCotizador = (clientName) => {
+    const cli = clients.find((c) => c.nombre === clientName);
+    if (cli) {
+      handleSelectCotClient(cli.id);
+    } else {
+      setCotClienteManual(clientName);
+    }
+    if (clientProductHistory.length > 0) {
+      setCotItems(
+        clientProductHistory.map((item) => {
+          const invMatch = inventory.find((p) => p.sku === item.sku);
+          return {
+            sku: item.sku,
+            unidadVenta: 'caja',
+            cantidad: Math.max(1, Math.round(item.totalCajas / Math.max(1, item.vecesPedido))),
+            fotoRef: invMatch?.fotoUrl || ''
+          };
+        })
+      );
+    }
+    setActiveTab('cotizador');
+  };
 
   // Cálculos Cotizador
   const selectedCotClient = useMemo(
@@ -716,6 +837,11 @@ export default function App() {
       iva: ordIva,
       total: ordTotal,
       utilidadEstimada: utilidadTotal,
+      comentarios: '',
+      facturado: 'No',
+      numFactura: '',
+      pagado: 'No',
+      numComplemento: '',
       estatus: 'Confirmado'
     });
 
@@ -731,7 +857,7 @@ export default function App() {
     alert(`Venta / Pedido #${ordFolio} confirmado y stock actualizado.`);
   };
 
-  // Analítica de Ventas (Pedidos = Ventas) para Dashboard Admin
+  // Analítica Dashboard
   const availableYears = useMemo(() => {
     const years = new Set([String(new Date().getFullYear())]);
     orders.forEach((o) => {
@@ -745,12 +871,43 @@ export default function App() {
       const f = String(o.fecha || '');
       const y = f.slice(0, 4);
       const m = f.slice(5, 7);
-      if (salesMode === 'anual') {
-        return y === salesYear;
-      }
+      if (salesMode === 'anual') return y === salesYear;
       return y === salesYear && m === salesMonth;
     });
   }, [orders, salesMode, salesYear, salesMonth]);
+
+  const topProducts = useMemo(() => {
+    const pMap = {};
+    filteredSales.forEach((o) => {
+      (o.partidas || []).forEach((line) => {
+        if (!pMap[line.sku]) {
+          pMap[line.sku] = { sku: line.sku, descripcion: line.descripcion, cajas: 0, importe: 0 };
+        }
+        pMap[line.sku].cajas += Number(line.cajas) || 0;
+        pMap[line.sku].importe += Number(line.subtotal) || 0;
+      });
+    });
+    return Object.values(pMap).sort((a, b) => b.cajas - a.cajas).slice(0, 8);
+  }, [filteredSales]);
+
+  // Gráfica mensual del año seleccionado (para visualización en Dashboard)
+  const monthlyChartData = useMemo(() => {
+    const months = [
+      { m: '01', label: 'Ene' }, { m: '02', label: 'Feb' }, { m: '03', label: 'Mar' },
+      { m: '04', label: 'Abr' }, { m: '05', label: 'May' }, { m: '06', label: 'Jun' },
+      { m: '07', label: 'Jul' }, { m: '08', label: 'Ago' }, { m: '09', label: 'Sep' },
+      { m: '10', label: 'Oct' }, { m: '11', label: 'Nov' }, { m: '12', label: 'Dic' }
+    ];
+    return months.map(({ m, label }) => {
+      const matching = orders.filter((o) => String(o.fecha || '').startsWith(`${salesYear}-${m}`));
+      const total = matching.reduce((s, o) => s + (Number(o.total) || 0), 0);
+      const cajas = matching.reduce(
+        (s, o) => s + (Array.isArray(o.partidas) ? o.partidas.reduce((c, p) => c + (Number(p.cajas) || 0), 0) : 0),
+        0
+      );
+      return { m, label, total, cajas, pedidos: matching.length };
+    });
+  }, [orders, salesYear]);
 
   const distributorSummary = useMemo(() => {
     const map = {};
@@ -856,7 +1013,7 @@ export default function App() {
         { id: 'margenes', label: 'Costos y Márgenes', icon: TrendingUp },
         { id: 'dashboard', label: 'Dashboard Ventas', icon: BarChart3 },
         { id: 'cotizador', label: 'Cotizador', icon: FileText },
-        { id: 'clientes', label: 'Distribuidores', icon: Users },
+        { id: 'clientes', label: 'Clientes / Historial', icon: Users },
         { id: 'ejecutivos', label: 'Ejecutivos y Firmas', icon: UserCheck },
         { id: 'pedido', label: 'Nueva Orden', icon: ShoppingCart },
         { id: 'record', label: 'Récord Pedidos', icon: History }
@@ -866,9 +1023,20 @@ export default function App() {
         { id: 'cotizador', label: 'Cotizador', icon: FileText }
       ];
 
+  const maxMonthlyVal = Math.max(...monthlyChartData.map((d) => d.total), 1);
+  const maxTopSkuCajas = Math.max(...topProducts.map((p) => p.cajas), 1);
+
   return (
     <div className="min-h-screen bg-white text-black">
-      {/* Barra superior (oculta al imprimir) */}
+      <style>{`
+        @media print {
+          @page { size: landscape; margin: 10mm; }
+          .no-print { display: none !important; }
+          body { background: #ffffff !important; color: #000000 !important; }
+        }
+      `}</style>
+
+      {/* Barra superior */}
       <header style={{ backgroundColor: '#2B5A45' }} className="text-white px-6 py-3.5 shadow-md no-print">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -921,7 +1089,7 @@ export default function App() {
           <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4 no-print">
             <div>
               <h2 className="font-semibold text-black">Base de datos lista para inicializarse</h2>
-              <p className="text-sm text-gray-700">Carga automáticamente tus 129 SKUs, distribuidores y las 5 firmas digitales[cite: 1].</p>
+              <p className="text-sm text-gray-700">Carga automáticamente tus SKUs, distribuidores y las 5 firmas digitales.</p>
             </div>
             <button
               onClick={seedDatabase}
@@ -935,7 +1103,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 1: INVENTARIO (Títulos de tu CSV + Precio por Paq antes de Costo por Caja) */}
+        {/* TAB 1: INVENTARIO (Títulos CSV + Precio por Paq antes de Costo por Caja + Foto de referencia Admin) */}
         {activeTab === 'inventario' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
@@ -957,27 +1125,20 @@ export default function App() {
                     onChange={(e) => setFilterSize(e.target.value)}
                     className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-black"
                   >
-                    {TAMANOS_FILTER.map((t) => (
-                      <option key={t} value={t}>Tamaño: {t}</option>
-                    ))}
+                    {TAMANOS_FILTER.map((t) => <option key={t} value={t}>Tamaño: {t}</option>)}
                   </select>
                   <select
                     value={filterMaterial}
                     onChange={(e) => setFilterMaterial(e.target.value)}
                     className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-black"
                   >
-                    {MATERIALES_FILTER.map((m) => (
-                      <option key={m} value={m}>Material: {m}</option>
-                    ))}
+                    {MATERIALES_FILTER.map((m) => <option key={m} value={m}>Material: {m}</option>)}
                   </select>
                 </div>
 
                 {isAdmin && (
                   <div className="flex flex-wrap gap-2">
-                    <label
-                      title="Importa CSV con tus títulos: SKU, Descripción, STOCK, Precio por Paq, Costo por Caja, Costo Unidad, U/PQ, P/CAJA..."
-                      className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium cursor-pointer"
-                    >
+                    <label className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium cursor-pointer">
                       <Upload className="w-3.5 h-3.5" /> Importar CSV
                       <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
                     </label>
@@ -1023,6 +1184,7 @@ export default function App() {
                   <tr>
                     <th className="px-3 py-3">SKU</th>
                     <th className="px-3 py-3">Descripción</th>
+                    <th className="px-3 py-3 text-center">Foto Ref.</th>
                     <th className="px-3 py-3 text-center">STOCK</th>
                     <th className="px-3 py-3 text-right">Precio por Paq</th>
                     <th className="px-3 py-3 text-right">Costo por Caja</th>
@@ -1045,6 +1207,46 @@ export default function App() {
                       <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-3 py-2.5 font-mono font-bold text-black">{item.sku}</td>
                         <td className="px-3 py-2.5 text-[11px] text-black max-w-xs truncate" title={item.descripcion}>{item.descripcion}</td>
+                        <td className="px-3 py-2.5 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {item.fotoUrl ? (
+                              <img
+                                src={toDirectDriveImg(item.fotoUrl)}
+                                alt={item.sku}
+                                className="w-8 h-8 object-cover rounded border border-gray-300"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <span className="text-[10px] text-gray-400">-</span>
+                            )}
+                            {isAdmin && (
+                              <div className="flex items-center gap-1">
+                                <label title="Subir imagen manual" className="cursor-pointer px-1.5 py-0.5 border border-gray-300 rounded text-[10px] hover:bg-gray-100">
+                                  Subir
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) =>
+                                      readImageFileAsDataUrl(e.target.files?.[0], (url) => handleUpdateSkuFoto(item, url))
+                                    }
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  title="Pegar link de foto"
+                                  onClick={() => {
+                                    const link = window.prompt(`Link de foto de referencia para ${item.sku}:`, item.fotoUrl || '');
+                                    if (link !== null) handleUpdateSkuFoto(item, link.trim());
+                                  }}
+                                  className="px-1.5 py-0.5 border border-gray-300 rounded text-[10px] hover:bg-gray-100"
+                                >
+                                  Link
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-3 py-2.5">
                           {isAdmin ? (
                             <div className="flex items-center justify-center gap-1.5">
@@ -1090,7 +1292,7 @@ export default function App() {
                   <TrendingUp className="w-5 h-5 text-[#2B5A45]" /> Control de Costos y Márgenes de Ganancia
                 </h2>
                 <p className="text-xs text-gray-600">
-                  Compara <strong>Precio de Adquisición</strong> vs. <strong>Precio de Venta</strong> por caja y calcula margen en <strong>$</strong> y <strong>%</strong>.
+                  Precio de Adquisición vs. Precio de Venta por caja con margen en <strong>$</strong> y <strong>%</strong>.
                 </p>
               </div>
               <button
@@ -1176,21 +1378,36 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: DASHBOARD DE VENTAS (Pedidos = Ventas, Mensual/Anual, Distribuidor y Vendedor) */}
+        {/* TAB 3: DASHBOARD VISUAL DE VENTAS CON GRÁFICAS + PDF HORIZONTAL */}
         {isAdmin && activeTab === 'dashboard' && (
           <div className="space-y-5">
-            <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-4">
+            {/* Cabecera imprimible en horizontal */}
+            <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-4">
               <div className="flex flex-wrap justify-between items-center gap-3 border-b border-gray-200 pb-3">
-                <div>
-                  <h2 className="font-bold text-lg text-black flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-[#2B5A45]" /> Dashboard de Ventas y Reportes Comerciales
-                  </h2>
-                  <p className="text-xs text-gray-600">
-                    Cada pedido confirmado se registra como venta. Filtra por mes/año o anual general y descarga reportes por distribuidor o vendedor.
-                  </p>
+                <div className="flex items-center gap-3">
+                  <img
+                    src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)}
+                    alt="La Pajarita"
+                    className="h-11 object-contain"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div>
+                    <h2 className="font-bold text-lg text-black flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-[#2B5A45]" /> Dashboard Ejecutivo de Ventas
+                    </h2>
+                    <p className="text-xs text-gray-600">
+                      {salesMode === 'anual' ? `Reporte Anual General (${salesYear})` : `Reporte Mensual (${salesYear}-${salesMonth})`} • Pedidos registrados como ventas
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 no-print">
+                  <button
+                    onClick={() => window.print()}
+                    className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3.5 py-2 rounded-lg text-xs font-semibold"
+                  >
+                    <Printer className="w-4 h-4 text-[#2B5A45]" /> Descargar PDF Horizontal
+                  </button>
                   <button
                     onClick={() =>
                       exportToCSV(
@@ -1204,23 +1421,25 @@ export default function App() {
                           Vendedor_Ejecutivo: o.ejecutivo,
                           Cajas: Array.isArray(o.partidas) ? o.partidas.reduce((s, p) => s + (Number(p.cajas) || 0), 0) : 0,
                           Subtotal: Number(o.subtotal || 0).toFixed(2),
-                          Envio: Number(o.envio || 0).toFixed(2),
                           IVA: Number(o.iva || 0).toFixed(2),
-                          Total: Number(o.total || 0).toFixed(2)
+                          Total: Number(o.total || 0).toFixed(2),
+                          Facturado: o.facturado || 'No',
+                          Num_Factura: o.numFactura || '',
+                          Pagado: o.pagado || 'No',
+                          Num_Complemento: o.numComplemento || ''
                         }))
                       )
                     }
                     style={{ backgroundColor: '#2B5A45' }}
                     className="flex items-center gap-1.5 text-white px-3.5 py-2 rounded-lg text-xs font-semibold"
                   >
-                    <Download className="w-4 h-4" />
-                    {salesMode === 'anual' ? `Descargar Anual (${salesYear})` : `Descargar Mes (${salesYear}-${salesMonth})`}
+                    <Download className="w-4 h-4" /> Descargar CSV
                   </button>
                 </div>
               </div>
 
               {/* Controles de periodo y tipo de reporte */}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs no-print">
                 <div>
                   <label className="block font-bold mb-1">Periodo</label>
                   <select
@@ -1240,9 +1459,7 @@ export default function App() {
                     onChange={(e) => setSalesYear(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-2 bg-white text-black"
                   >
-                    {availableYears.map((y) => (
-                      <option key={y} value={y}>{y}</option>
-                    ))}
+                    {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
 
@@ -1277,7 +1494,7 @@ export default function App() {
                       onClick={() => setReportType('general')}
                       className={`flex-1 py-2 px-3 rounded-lg border font-semibold ${reportType === 'general' ? 'bg-[#2B5A45] text-white border-[#2B5A45]' : 'bg-white text-black border-gray-300'}`}
                     >
-                      Ventas Generales
+                      General
                     </button>
                     <button
                       onClick={() => setReportType('distribuidor')}
@@ -1294,35 +1511,106 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* KPIs con acentos de color */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+                <div className="p-4 rounded-xl border-l-4 border-[#2B5A45] bg-emerald-50/40">
+                  <span className="text-xs text-gray-700 font-semibold block">Número de Pedidos / Ventas</span>
+                  <span className="text-2xl font-bold text-black">{salesKpis.numVentas}</span>
+                  <span className="text-[11px] text-gray-600 block mt-0.5">Total c/IVA: {formatCurrency(salesKpis.totalVentas)}</span>
+                </div>
+                <div className="p-4 rounded-xl border-l-4 border-[#0284C7] bg-sky-50/40">
+                  <span className="text-xs text-gray-700 font-semibold block">Cantidad Vendida (Cajas)</span>
+                  <span className="text-2xl font-bold text-black">{salesKpis.totalCajas.toLocaleString('es-MX')}</span>
+                  <span className="text-[11px] text-gray-600 block mt-0.5">Subtotal s/IVA: {formatCurrency(salesKpis.subtotalVentas)}</span>
+                </div>
+                <div className="p-4 rounded-xl border-l-4 border-[#D97706] bg-amber-50/40">
+                  <span className="text-xs text-gray-700 font-semibold block">Utilidad Estimada ($)</span>
+                  <span className="text-2xl font-bold text-black">{formatCurrency(salesKpis.utilidadTotal)}</span>
+                  <span className="text-[11px] text-gray-600 block mt-0.5">Ganancia bruta estimada</span>
+                </div>
+                <div className="p-4 rounded-xl border-l-4 border-[#0F766E] bg-teal-50/40">
+                  <span className="text-xs text-gray-700 font-semibold block">Margen Promedio (%)</span>
+                  <span className="text-2xl font-bold text-black flex items-center gap-1">
+                    {salesKpis.margenPct.toFixed(1)}% <Percent className="w-4 h-4 text-[#0F766E]" />
+                  </span>
+                  <span className="text-[11px] text-gray-600 block mt-0.5">Sobre subtotal vendido</span>
+                </div>
+              </div>
+
+              {/* Gráficas Visuales: Tendencia Mensual del Año + Productos Más Vendidos */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-2">
+                <div className="border border-gray-200 rounded-xl p-4 bg-white">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-sm text-black">Comportamiento de Ventas Mensuales ({salesYear})</h3>
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-100 text-[#2B5A45] font-semibold">MXN Total</span>
+                  </div>
+                  <div className="h-44 flex items-end justify-between gap-1.5 pt-4 border-b border-gray-200">
+                    {monthlyChartData.map((d) => {
+                      const heightPct = maxMonthlyVal > 0 ? Math.max(4, Math.round((d.total / maxMonthlyVal) * 100)) : 4;
+                      const isSelected = salesMode === 'mensual' && d.m === salesMonth;
+                      return (
+                        <div key={d.m} className="flex-1 flex flex-col items-center justify-end h-full group">
+                          <span className="text-[9px] font-bold text-gray-700 mb-1">
+                            {d.cajas > 0 ? `${d.cajas}c` : ''}
+                          </span>
+                          <div
+                            title={`${d.label}: ${formatCurrency(d.total)} (${d.cajas} cajas)`}
+                            style={{
+                              height: `${heightPct}%`,
+                              backgroundColor: isSelected ? '#D97706' : (d.total > 0 ? '#2B5A45' : '#E5E7EB')
+                            }}
+                            className="w-full rounded-t transition-all"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between gap-1.5 mt-1.5">
+                    {monthlyChartData.map((d) => (
+                      <span key={d.m} className="flex-1 text-center text-[10px] font-semibold text-black">{d.label}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border border-gray-200 rounded-xl p-4 bg-white">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-bold text-sm text-black">Productos Más Vendidos (Ranking por Cajas)</h3>
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold">Top SKUs</span>
+                  </div>
+                  {topProducts.length === 0 ? (
+                    <p className="text-xs text-gray-500 py-10 text-center">Sin ventas en este periodo para mostrar ranking.</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {topProducts.map((p, i) => {
+                        const pct = Math.max(8, Math.round((p.cajas / maxTopSkuCajas) * 100));
+                        const barColors = ['#2B5A45', '#0F766E', '#0284C7', '#D97706', '#4D7C0F', '#0369A1', '#B45309', '#15803D'];
+                        return (
+                          <div key={p.sku} className="space-y-1">
+                            <div className="flex justify-between text-[11px]">
+                              <span className="font-bold text-black truncate max-w-[260px]">
+                                #{i + 1} {p.sku} — <span className="font-normal text-gray-700">{p.descripcion}</span>
+                              </span>
+                              <span className="font-bold text-black shrink-0 ml-2">
+                                {p.cajas} cajas ({formatCurrency(p.importe)})
+                              </span>
+                            </div>
+                            <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                              <div
+                                style={{ width: `${pct}%`, backgroundColor: barColors[i % barColors.length] }}
+                                className="h-full rounded-full"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-xl border border-gray-200">
-                <span className="text-xs text-gray-600 block">Ventas Totales (c/IVA)</span>
-                <span className="text-2xl font-bold text-black">{formatCurrency(salesKpis.totalVentas)}</span>
-                <span className="text-[11px] text-gray-500 block mt-1">{salesKpis.numVentas} ventas registradas</span>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200">
-                <span className="text-xs text-gray-600 block">Cajas Vendidas</span>
-                <span className="text-2xl font-bold text-black">{salesKpis.totalCajas.toLocaleString('es-MX')}</span>
-                <span className="text-[11px] text-gray-500 block mt-1">Subtotal s/IVA: {formatCurrency(salesKpis.subtotalVentas)}</span>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200">
-                <span className="text-xs text-gray-600 block">Utilidad Estimada ($)</span>
-                <span className="text-2xl font-bold text-[#2B5A45]">{formatCurrency(salesKpis.utilidadTotal)}</span>
-                <span className="text-[11px] text-gray-500 block mt-1">Basado en precio de adquisición</span>
-              </div>
-              <div className="bg-white p-4 rounded-xl border border-gray-200">
-                <span className="text-xs text-gray-600 block">Margen Promedio (%)</span>
-                <span className="text-2xl font-bold text-black flex items-center gap-1">
-                  {salesKpis.margenPct.toFixed(1)}% <Percent className="w-4 h-4 text-[#2B5A45]" />
-                </span>
-                <span className="text-[11px] text-gray-500 block mt-1">Periodo: {salesMode === 'anual' ? `Año ${salesYear}` : `${salesYear}-${salesMonth}`}</span>
-              </div>
-            </div>
-
-            {/* Reporte General */}
+            {/* Tablas de Reporte según selección (clic en pedido para editar comentarios/pago) */}
             {reportType === 'general' && (
               <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
                 <table className="w-full text-xs text-left">
@@ -1333,7 +1621,7 @@ export default function App() {
                       <th className="px-4 py-3">Distribuidor / Cliente</th>
                       <th className="px-4 py-3">Vendedor / Ejecutivo</th>
                       <th className="px-4 py-3 text-center">Cajas</th>
-                      <th className="px-4 py-3 text-right">Subtotal</th>
+                      <th className="px-4 py-3 text-center">Factura / Pago</th>
                       <th className="px-4 py-3 text-right">Total Venta</th>
                     </tr>
                   </thead>
@@ -1341,13 +1629,20 @@ export default function App() {
                     {filteredSales.map((o) => {
                       const cajas = Array.isArray(o.partidas) ? o.partidas.reduce((s, p) => s + (Number(p.cajas) || 0), 0) : 0;
                       return (
-                        <tr key={o.id}>
+                        <tr
+                          key={o.id}
+                          onClick={() => openEditOrderModal(o)}
+                          className="hover:bg-emerald-50/50 cursor-pointer"
+                          title="Clic para ver/editar comentarios y datos de pago"
+                        >
                           <td className="px-4 py-2.5 font-bold">#{o.folio}</td>
                           <td className="px-4 py-2.5">{o.fecha}</td>
                           <td className="px-4 py-2.5 font-semibold">{o.cliente}</td>
                           <td className="px-4 py-2.5">{o.ejecutivo}</td>
                           <td className="px-4 py-2.5 text-center">{cajas}</td>
-                          <td className="px-4 py-2.5 text-right">{formatCurrency(o.subtotal)}</td>
+                          <td className="px-4 py-2.5 text-center text-[11px]">
+                            Fact: <strong>{o.facturado || 'No'}</strong> • Pago: <strong>{o.pagado || 'No'}</strong>
+                          </td>
                           <td className="px-4 py-2.5 text-right font-bold">{formatCurrency(o.total)}</td>
                         </tr>
                       );
@@ -1364,7 +1659,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Reporte por Distribuidor */}
             {reportType === 'distribuidor' && (
               <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
                 <div className="flex flex-wrap justify-between items-center gap-3">
@@ -1376,9 +1670,7 @@ export default function App() {
                       className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-white text-black"
                     >
                       <option value="Todos">Todos los Distribuidores</option>
-                      {distributorSummary.map((d) => (
-                        <option key={d.cliente} value={d.cliente}>{d.cliente}</option>
-                      ))}
+                      {distributorSummary.map((d) => <option key={d.cliente} value={d.cliente}>{d.cliente}</option>)}
                     </select>
                   </div>
                   <button
@@ -1438,7 +1730,6 @@ export default function App() {
               </div>
             )}
 
-            {/* Reporte por Vendedor / Ejecutivo */}
             {reportType === 'vendedor' && (
               <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
                 <div className="flex flex-wrap justify-between items-center gap-3">
@@ -1450,9 +1741,7 @@ export default function App() {
                       className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-white text-black"
                     >
                       <option value="Todos">Todos los Vendedores</option>
-                      {sellerSummary.map((s) => (
-                        <option key={s.vendedor} value={s.vendedor}>{s.vendedor}</option>
-                      ))}
+                      {sellerSummary.map((s) => <option key={s.vendedor} value={s.vendedor}>{s.vendedor}</option>)}
                     </select>
                   </div>
                   <button
@@ -1514,7 +1803,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: COTIZADOR (Con Fecha igual que en Pedido) */}
+        {/* TAB 4: COTIZADOR (Fecha editable + Foto de referencia opcional por renglón) */}
         {activeTab === 'cotizador' && (
           <div className="space-y-4">
             <div className="no-print bg-white p-4 rounded-xl border border-gray-200 space-y-4">
@@ -1538,9 +1827,7 @@ export default function App() {
                     className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
                   >
                     <option value="">-- Cliente Nuevo / Sin Descuento --</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>{c.nombre}</option>
-                    ))}
+                    {clients.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                   </select>
                 </div>
 
@@ -1551,9 +1838,7 @@ export default function App() {
                     onChange={(e) => setCotImpresion(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white font-semibold text-black"
                   >
-                    {MODALIDADES_IMPRESION.map((m) => (
-                      <option key={m.id} value={m.id}>{m.label}</option>
-                    ))}
+                    {MODALIDADES_IMPRESION.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                   </select>
                 </div>
 
@@ -1564,9 +1849,7 @@ export default function App() {
                     onChange={(e) => setCotEjecutivoId(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
                   >
-                    {ejecutivos.map((ej) => (
-                      <option key={ej.id} value={ej.id}>{ej.nombre}</option>
-                    ))}
+                    {ejecutivos.map((ej) => <option key={ej.id} value={ej.id}>{ej.nombre}</option>)}
                   </select>
                 </div>
 
@@ -1687,6 +1970,7 @@ export default function App() {
                     <tr style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[10px]">
                       <th className="p-2 text-left">SKU</th>
                       <th className="p-2 text-left">Producto</th>
+                      <th className="p-2 text-center">Foto Ref.</th>
                       <th className="p-2 text-center">Presentación</th>
                       <th className="p-2 text-center">Cant.</th>
                       <th className="p-2 text-center">Uds x Paq</th>
@@ -1703,25 +1987,56 @@ export default function App() {
                     {cotItems.map((row, idx) => {
                       const prod = inventory.find((p) => p.sku === row.sku);
                       const calc = calcLineCotizacion(prod, row.unidadVenta, Number(row.cantidad) || 0);
+                      const fotoVisible = row.fotoRef || prod?.fotoUrl || '';
                       return (
                         <tr key={idx} className="bg-white">
                           <td className="p-1.5 font-mono font-bold text-black">
                             <select
                               value={row.sku}
                               onChange={(e) => {
+                                const chosenSku = e.target.value;
+                                const matchProd = inventory.find((p) => p.sku === chosenSku);
                                 const up = [...cotItems];
-                                up[idx].sku = e.target.value;
+                                up[idx].sku = chosenSku;
+                                if (!up[idx].fotoRef && matchProd?.fotoUrl) {
+                                  up[idx].fotoRef = matchProd.fotoUrl;
+                                }
                                 setCotItems(up);
                               }}
                               className="border border-gray-300 rounded p-1 font-mono text-[11px] w-28 bg-white text-black"
                             >
                               <option value="">SKU...</option>
-                              {filteredInventory.map((p) => (
-                                <option key={p.sku} value={p.sku}>{p.sku}</option>
-                              ))}
+                              {filteredInventory.map((p) => <option key={p.sku} value={p.sku}>{p.sku}</option>)}
                             </select>
                           </td>
-                          <td className="p-1.5 text-[10px] leading-tight max-w-[190px] text-black">{prod?.descripcion || '-'}</td>
+                          <td className="p-1.5 text-[10px] leading-tight max-w-[170px] text-black">{prod?.descripcion || '-'}</td>
+                          <td className="p-1.5 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              {fotoVisible && (
+                                <img
+                                  src={toDirectDriveImg(fotoVisible)}
+                                  alt="Ref SKU"
+                                  className="w-10 h-10 object-cover rounded border border-gray-300"
+                                  referrerPolicy="no-referrer"
+                                />
+                              )}
+                              <label className="no-print cursor-pointer inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 border border-gray-300 rounded hover:bg-gray-100 text-black">
+                                <ImageIcon className="w-2.5 h-2.5" /> {fotoVisible ? 'Cambiar' : 'Foto (Opc.)'}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) =>
+                                    readImageFileAsDataUrl(e.target.files?.[0], (url) => {
+                                      const up = [...cotItems];
+                                      up[idx].fotoRef = url;
+                                      setCotItems(up);
+                                    })
+                                  }
+                                />
+                              </label>
+                            </div>
+                          </td>
                           <td className="p-1.5 text-center">
                             <select
                               value={row.unidadVenta}
@@ -1769,7 +2084,7 @@ export default function App() {
               </div>
 
               <button
-                onClick={() => setCotItems([...cotItems, { sku: '', unidadVenta: 'caja', cantidad: 1 }])}
+                onClick={() => setCotItems([...cotItems, { sku: '', unidadVenta: 'caja', cantidad: 1, fotoRef: '' }])}
                 className="no-print flex items-center gap-1 text-xs text-black font-bold hover:underline"
               >
                 <Plus className="w-3.5 h-3.5" /> Agregar renglón
@@ -1832,11 +2147,11 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: DISTRIBUIDORES (Solo Admin) */}
+        {/* TAB 5: DISTRIBUIDORES + HISTORIAL PERMANENTE DE PRODUCTOS (Solo Admin) */}
         {isAdmin && activeTab === 'clientes' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
-              <h2 className="font-bold text-lg text-black">Clientes y Distribuidores</h2>
+              <h2 className="font-bold text-lg text-black">Clientes, Distribuidores e Historial de Productos</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => exportToCSV('clientes_distribuidores.csv', clients)}
@@ -1853,6 +2168,7 @@ export default function App() {
                 </button>
               </div>
             </div>
+
             <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
               <table className="w-full text-sm text-left">
                 <thead style={{ backgroundColor: '#2B5A45' }} className="text-white text-xs uppercase">
@@ -1861,23 +2177,95 @@ export default function App() {
                     <th className="px-4 py-3">Tipo</th>
                     <th className="px-4 py-3 text-center">% Descuento</th>
                     <th className="px-4 py-3">Contacto</th>
-                    <th className="px-4 py-3">Correo / Teléfono</th>
                     <th className="px-4 py-3">Dirección</th>
+                    <th className="px-4 py-3 text-center">Historial</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white text-black">
                   {clients.map((c) => (
-                    <tr key={c.id}>
+                    <tr key={c.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-semibold">{c.nombre}</td>
                       <td className="px-4 py-3">{c.tipo}</td>
                       <td className="px-4 py-3 text-center font-bold">{c.descuento}%</td>
                       <td className="px-4 py-3">{c.contacto}</td>
-                      <td className="px-4 py-3 text-xs">{c.correo} {c.telefono && `• ${c.telefono}`}</td>
                       <td className="px-4 py-3 text-xs">{c.direccion}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => setSelectedHistoryClient(c.nombre)}
+                          className="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-[#2B5A45] text-xs font-semibold border border-emerald-200"
+                        >
+                          Ver SKUs
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Historial permanente de productos del cliente seleccionado */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+              <div className="flex flex-wrap justify-between items-center gap-3 border-b border-gray-200 pb-3">
+                <div>
+                  <h3 className="font-bold text-base text-black flex items-center gap-2">
+                    <ClipboardList className="w-4 h-4 text-[#2B5A45]" /> Historial de Productos del Cliente / Distribuidor
+                  </h3>
+                  <p className="text-xs text-gray-600">
+                    Conserva los SKUs pedidos históricamente para cotizarlos rápido sin perder su historial.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={selectedHistoryClient}
+                    onChange={(e) => setSelectedHistoryClient(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-white text-black font-semibold"
+                  >
+                    {clients.map((c) => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+                  </select>
+                  {selectedHistoryClient && clientProductHistory.length > 0 && (
+                    <button
+                      onClick={() => loadClientHistoryIntoCotizador(selectedHistoryClient)}
+                      style={{ backgroundColor: '#2B5A45' }}
+                      className="flex items-center gap-1 text-white px-3 py-1.5 rounded-lg text-xs font-semibold"
+                    >
+                      Cargar SKUs a Cotizador <ArrowUpRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {clientProductHistory.length === 0 ? (
+                <p className="text-xs text-gray-500 py-4 text-center">
+                  Aún no hay productos registrados en pedidos para <strong>{selectedHistoryClient}</strong>.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[10px]">
+                      <tr>
+                        <th className="px-3 py-2">SKU</th>
+                        <th className="px-3 py-2">Descripción</th>
+                        <th className="px-3 py-2 text-center">Veces Pedido</th>
+                        <th className="px-3 py-2 text-center">Total Cajas</th>
+                        <th className="px-3 py-2 text-right">Último Precio</th>
+                        <th className="px-3 py-2 text-center">Última Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 text-black">
+                      {clientProductHistory.map((item) => (
+                        <tr key={item.sku}>
+                          <td className="px-3 py-2 font-mono font-bold">{item.sku}</td>
+                          <td className="px-3 py-2">{item.descripcion}</td>
+                          <td className="px-3 py-2 text-center">{item.vecesPedido}</td>
+                          <td className="px-3 py-2 text-center font-bold">{item.totalCajas}</td>
+                          <td className="px-3 py-2 text-right font-semibold">{formatCurrency(item.ultimoPrecio)}</td>
+                          <td className="px-3 py-2 text-center">{item.ultimaFecha}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1948,7 +2336,12 @@ export default function App() {
                 </button>
                 <div className="text-right">
                   <span className="text-xs text-gray-600 block">Folio Pedido</span>
-                  <span className="text-xl font-bold text-black">#{ordFolio}</span>
+                  <input
+                    type="number"
+                    value={ordFolio}
+                    onChange={(e) => setOrdFolio(e.target.value)}
+                    className="w-24 text-right text-xl font-bold text-black bg-white border-b border-gray-300"
+                  />
                   <div className="mt-1">
                     <input
                       type="date"
@@ -2010,9 +2403,7 @@ export default function App() {
                   onChange={(e) => setOrdEjecutivo(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white text-black"
                 >
-                  {ejecutivos.map((ej) => (
-                    <option key={ej.id} value={ej.nombre}>{ej.nombre}</option>
-                  ))}
+                  {ejecutivos.map((ej) => <option key={ej.id} value={ej.nombre}>{ej.nombre}</option>)}
                 </select>
               </div>
             </div>
@@ -2050,9 +2441,7 @@ export default function App() {
                             className="border border-gray-300 rounded p-1.5 font-mono text-sm w-36 bg-white text-black"
                           >
                             <option value="">SKU...</option>
-                            {filteredInventory.map((p) => (
-                              <option key={p.sku} value={p.sku}>{p.sku}</option>
-                            ))}
+                            {filteredInventory.map((p) => <option key={p.sku} value={p.sku}>{p.sku}</option>)}
                           </select>
                         </td>
                         <td className="p-2 text-xs text-black">{prod?.descripcion || '-'}</td>
@@ -2148,11 +2537,14 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 8: RÉCORD DE PEDIDOS (Solo Admin) */}
+        {/* TAB 8: RÉCORD DE PEDIDOS (Clic para editar comentarios/pago + Eliminar con lógica de folio) */}
         {isAdmin && activeTab === 'record' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
-              <h2 className="font-bold text-lg text-black">Récord Histórico de Órdenes Confirmadas</h2>
+              <div>
+                <h2 className="font-bold text-lg text-black">Récord Histórico de Órdenes / Ventas</h2>
+                <p className="text-xs text-gray-600">Haz clic sobre cualquier pedido para agregar comentarios o gestionar facturación y pago.</p>
+              </div>
               <button
                 onClick={() =>
                   exportToCSV(
@@ -2166,7 +2558,12 @@ export default function App() {
                       Subtotal: o.subtotal,
                       Envio: o.envio,
                       IVA: o.iva,
-                      Total: o.total
+                      Total: o.total,
+                      Comentarios: o.comentarios || '',
+                      Facturado: o.facturado || 'No',
+                      Num_Factura: o.numFactura || '',
+                      Pagado: o.pagado || 'No',
+                      Num_Complemento: o.numComplemento || ''
                     }))
                   )
                 }
@@ -2179,7 +2576,11 @@ export default function App() {
 
             <div className="space-y-3">
               {orders.map((ord) => (
-                <div key={ord.id} className="bg-white p-4 rounded-xl border border-gray-200 text-black">
+                <div
+                  key={ord.id}
+                  onClick={() => openEditOrderModal(ord)}
+                  className="bg-white p-4 rounded-xl border border-gray-200 hover:border-[#2B5A45] cursor-pointer text-black transition"
+                >
                   <div className="flex flex-wrap justify-between items-center border-b border-gray-200 pb-2 mb-2 gap-3">
                     <div>
                       <span className="font-bold mr-3">Pedido #{ord.folio}</span>
@@ -2192,14 +2593,18 @@ export default function App() {
                         <span className="text-xs font-normal text-gray-600">(Envío: {formatCurrency(ord.envio)})</span>
                       </div>
                       <button
-                        onClick={() => handleDeleteOrder(ord)}
-                        title="Eliminar pedido y regresar stock al inventario"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteOrder(ord);
+                        }}
+                        title="Eliminar pedido y regresar stock"
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Eliminar
                       </button>
                     </div>
                   </div>
+
                   <div className="text-xs text-black space-y-1">
                     {ord.partidas?.map((p, idx) => (
                       <div key={idx} className="flex justify-between">
@@ -2208,6 +2613,20 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+
+                  {ord.comentarios && (
+                    <p className="mt-2 text-xs bg-gray-50 border border-gray-200 rounded p-2 text-gray-800">
+                      <strong>Comentario:</strong> {ord.comentarios}
+                    </p>
+                  )}
+
+                  {isAdmin && (
+                    <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-gray-700">
+                      <span><strong>Facturado:</strong> {ord.facturado || 'No'} {ord.numFactura ? `(#${ord.numFactura})` : ''}</span>
+                      <span>•</span>
+                      <span><strong>Pagado:</strong> {ord.pagado || 'No'} {ord.numComplemento ? `(Comp: #${ord.numComplemento})` : ''}</span>
+                    </div>
+                  )}
                 </div>
               ))}
               {orders.length === 0 && (
@@ -2218,6 +2637,96 @@ export default function App() {
         )}
       </main>
 
+      {/* Modal para editar Comentarios e Información de Pago (privada para admins) */}
+      {isAdmin && editingOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleSaveOrderDetails} className="bg-white rounded-xl p-6 max-w-lg w-full space-y-4 text-black shadow-xl">
+            <div className="flex justify-between items-center border-b border-gray-200 pb-3">
+              <div>
+                <h3 className="font-bold text-base">Pedido #{editingOrder.folio} — {editingOrder.cliente}</h3>
+                <p className="text-xs text-gray-600">Fecha: {editingOrder.fecha} • Total: {formatCurrency(editingOrder.total)}</p>
+              </div>
+              <button type="button" onClick={() => setEditingOrder(null)} className="text-gray-500 hover:text-black">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5 text-[#2B5A45]" /> Comentarios del Pedido
+              </label>
+              <textarea
+                rows="3"
+                placeholder="Escribe observaciones, instrucciones de entrega o seguimiento..."
+                value={editComentarios}
+                onChange={(e) => setEditComentarios(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
+              />
+            </div>
+
+            {/* Sección exclusiva para contacto@la-pajarita y eduardo@la-pajarita */}
+            <div className="border border-emerald-200 bg-emerald-50/40 rounded-xl p-4 space-y-3">
+              <h4 className="text-xs font-bold uppercase text-[#2B5A45] flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4" /> Información de Pago y Facturación (Solo Administración)
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block font-semibold mb-1">¿Ya se facturó?</label>
+                  <select
+                    value={editFacturado}
+                    onChange={(e) => setEditFacturado(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg p-2 bg-white text-black"
+                  >
+                    <option value="No">No</option>
+                    <option value="Sí">Sí</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Número de factura</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. FAC-1042"
+                    value={editNumFactura}
+                    onChange={(e) => setEditNumFactura(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg p-2 bg-white text-black"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">¿Ya pagó?</label>
+                  <select
+                    value={editPagado}
+                    onChange={(e) => setEditPagado(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg p-2 bg-white text-black"
+                  >
+                    <option value="No">No</option>
+                    <option value="Sí">Sí</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Número de complemento de pago</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. COMP-889"
+                    value={editNumComplemento}
+                    onChange={(e) => setEditNumComplemento(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg p-2 bg-white text-black"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 text-xs border border-gray-300 rounded-lg">
+                Cancelar
+              </button>
+              <button type="submit" style={{ backgroundColor: '#2B5A45' }} className="px-4 py-2 text-xs text-white rounded-lg font-semibold">
+                Guardar Cambios
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Modales exclusivos de Administrador */}
       {isAdmin && showProdModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -2227,7 +2736,7 @@ export default function App() {
             <input required placeholder="Descripción" value={newProd.descripcion} onChange={(e) => setNewProd({ ...newProd, descripcion: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs">STOCK (Cajas)</label>
+                <label className="text-xs">STOCK</label>
                 <input type="number" value={newProd.stock} onChange={(e) => setNewProd({ ...newProd, stock: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
               </div>
               <div>
@@ -2249,6 +2758,26 @@ export default function App() {
               <div>
                 <label className="text-xs">P/CAJA</label>
                 <input type="number" value={newProd.pCaja} onChange={(e) => setNewProd({ ...newProd, pCaja: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold">Foto de Referencia (Link o Archivo)</label>
+              <div className="flex gap-2">
+                <input
+                  placeholder="https://... o enlace de Drive"
+                  value={newProd.fotoUrl}
+                  onChange={(e) => setNewProd({ ...newProd, fotoUrl: e.target.value })}
+                  className="flex-1 border border-gray-300 rounded p-2 text-xs bg-white"
+                />
+                <label className="cursor-pointer px-3 py-2 border border-gray-300 rounded text-xs font-medium hover:bg-gray-50">
+                  Subir
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => readImageFileAsDataUrl(e.target.files?.[0], (url) => setNewProd({ ...newProd, fotoUrl: url }))}
+                  />
+                </label>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
