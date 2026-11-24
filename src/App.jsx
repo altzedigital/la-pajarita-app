@@ -30,7 +30,6 @@ import {
   Trash2,
   Printer,
   CheckCircle2,
-  AlertTriangle,
   Database,
   Search,
   LogOut,
@@ -44,7 +43,11 @@ import {
   CreditCard,
   X,
   ClipboardList,
-  ArrowUpRight
+  ArrowUpRight,
+  Edit3,
+  BookmarkCheck,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -65,8 +68,43 @@ const googleProvider = new GoogleAuthProvider();
 const ADMIN_EMAILS = [
   'contacto@la-pajarita.com.mx',
   'eduardo@la-pajarita.com.mx'
-  'mariana@la-pajarita.com.mx'
 ];
+
+const ESTADOS_MEXICO = [
+  'AGUASCALIENTES', 'BAJA CALIFORNIA', 'BAJA CALIFORNIA SUR', 'CAMPECHE',
+  'CHIAPAS', 'CHIHUAHUA', 'CIUDAD DE MÉXICO', 'COAHUILA', 'COLIMA',
+  'DURANGO', 'ESTADO DE MÉXICO', 'GUANAJUATO', 'GUERRERO', 'HIDALGO',
+  'JALISCO', 'MICHOACÁN', 'MORELOS', 'NAYARIT', 'NUEVO LEÓN', 'OAXACA',
+  'PUEBLA', 'QUERÉTARO', 'QUINTANA ROO', 'SAN LUIS POTOSÍ', 'SINALOA',
+  'SONORA', 'TABASCO', 'TAMAULIPAS', 'TLAXCALA', 'VERACRUZ', 'YUCATÁN',
+  'ZACATECAS'
+];
+
+const EMPTY_ADDRESS = {
+  calle: '',
+  numExt: '',
+  numInt: '',
+  colonia: '',
+  cp: '',
+  municipio: '',
+  estado: ''
+};
+
+const toUpper = (v) => String(v || '').toUpperCase();
+
+const formatStructuredAddress = (addr) => {
+  if (!addr || typeof addr !== 'object') return '';
+  const parts = [
+    addr.calle ? `CALLE ${toUpper(addr.calle)}` : '',
+    addr.numExt ? `EXT. ${toUpper(addr.numExt)}` : '',
+    addr.numInt ? `INT. ${toUpper(addr.numInt)}` : '',
+    addr.colonia ? `COL. ${toUpper(addr.colonia)}` : '',
+    addr.cp ? `CP ${toUpper(addr.cp)}` : '',
+    addr.municipio ? toUpper(addr.municipio) : '',
+    addr.estado ? toUpper(addr.estado) : ''
+  ].filter(Boolean);
+  return parts.join(', ');
+};
 
 const toDirectDriveImg = (url) => {
   if (!url) return '';
@@ -121,8 +159,32 @@ const INITIAL_INVENTORY = [
 ];
 
 const INITIAL_CLIENTS = [
-  { id: 'siha-partner', nombre: 'SIHA PARTNER S.A. DE C.V', tipo: 'Distribuidor', descuento: 30, contacto: 'Compras', telefono: '', correo: '', rfc: '', direccion: '25 DE FEBRERO DE 1861 NO. 1413, LEYES DE REFORMA' },
-  { id: 'cliente-directo', nombre: 'Cliente Directo General', tipo: 'Cliente Directo', descuento: 0, contacto: 'Mostrador', telefono: '', correo: '', rfc: 'XAXX010101000', direccion: 'Ciudad de México' }
+  {
+    id: 'siha-partner',
+    nombre: 'SIHA PARTNER S.A. DE C.V',
+    tipo: 'Distribuidor',
+    descuento: 30,
+    contacto: 'COMPRAS',
+    telefono: '',
+    correo: 'contacto@la-pajarita.com.mx',
+    rfc: '',
+    direccionEnvio: { calle: '25 DE FEBRERO DE 1861', numExt: '1413', numInt: '', colonia: 'LEYES DE REFORMA', cp: '', municipio: '', estado: 'CIUDAD DE MÉXICO' },
+    direccionFacturacion: { calle: '25 DE FEBRERO DE 1861', numExt: '1413', numInt: '', colonia: 'LEYES DE REFORMA', cp: '', municipio: '', estado: 'CIUDAD DE MÉXICO' },
+    direccion: '25 DE FEBRERO DE 1861 NO. 1413, LEYES DE REFORMA'
+  },
+  {
+    id: 'cliente-directo',
+    nombre: 'CLIENTE DIRECTO GENERAL',
+    tipo: 'Cliente Directo',
+    descuento: 0,
+    contacto: 'MOSTRADOR',
+    telefono: '',
+    correo: 'eduardo@la-pajarita.com.mx',
+    rfc: 'XAXX010101000',
+    direccionEnvio: { calle: '', numExt: '', numInt: '', colonia: '', cp: '', municipio: 'CIUDAD DE MÉXICO', estado: 'CIUDAD DE MÉXICO' },
+    direccionFacturacion: { calle: '', numExt: '', numInt: '', colonia: '', cp: '', municipio: 'CIUDAD DE MÉXICO', estado: 'CIUDAD DE MÉXICO' },
+    direccion: 'CIUDAD DE MÉXICO'
+  }
 ];
 
 const INITIAL_EJECUTIVOS = [
@@ -135,10 +197,10 @@ const INITIAL_EJECUTIVOS = [
 
 const MODALIDADES_IMPRESION = [
   { id: 'sin', label: 'Sin impresión', short: 'Sin impresión' },
-  { id: '1tinta', label: '1 Tinta (+25%)', short: '1 Tinta' },
-  { id: '2tintas', label: '2 Tintas (+30%)', short: '2 Tintas' },
-  { id: '1tintamx', label: '1 Tinta México (+$0.70/paq)', short: '1 Tinta MX' },
-  { id: '2tintasmx', label: '2 Tintas México (+$1.00/paq)', short: '2 Tintas MX' }
+  { id: '1tinta', label: '1 Tinta (+25%)', short: '1 Tinta (+25%)' },
+  { id: '2tintas', label: '2 Tintas (+30%)', short: '2 Tintas (+30%)' },
+  { id: '1tintamx', label: '1 Tinta México (+$0.70/paq)', short: '1 Tinta MX (+$0.70/paq)' },
+  { id: '2tintasmx', label: '2 Tintas México (+$1.00/paq)', short: '2 Tintas MX (+$1.00/paq)' }
 ];
 
 const TAMANOS_FILTER = ['Todos', '20x20', '25x25', '25x35', '30x40', '33x33', '40x20', '40x32', '100x100'];
@@ -191,6 +253,37 @@ const extractMaterial = (sku, desc) => {
   return 'Basic / Otro';
 };
 
+const extractColor = (sku, desc) => {
+  const text = `${sku} ${desc}`.toLowerCase();
+  if (text.includes('blanco') || text.includes('bca') || sku.toLowerCase().includes('bl')) return 'Blanco';
+  if (text.includes('negro') || text.includes('negra') || sku.toLowerCase().includes('ne')) return 'Negro';
+  if (text.includes('azul') || sku.toLowerCase().includes('az')) return 'Azul';
+  if (text.includes('rojo') || sku.toLowerCase().includes('ro')) return 'Rojo';
+  if (text.includes('verde') || sku.toLowerCase().includes('ve') || sku.toLowerCase().includes('vo')) return 'Verde';
+  if (text.includes('burdeos') || sku.toLowerCase().includes('bu')) return 'Burdeos';
+  return 'Otro';
+};
+
+const extractCollection = (sku, desc) => {
+  const text = `${sku} ${desc}`.toLowerCase();
+  const known = [
+    { key: 'marais', label: 'Marais' },
+    { key: 'navidad', label: 'Navidad' },
+    { key: 'go green', label: 'Go Green' },
+    { key: 'napoles', label: 'Nápoles' },
+    { key: 'nápoles', label: 'Nápoles' },
+    { key: 'tripoli', label: 'Trípoli' },
+    { key: 'trípoli', label: 'Trípoli' },
+    { key: 'bali', label: 'Bali' },
+    { key: 'airlaid', label: 'Airlaid' },
+    { key: 'basic', label: 'Basic' }
+  ];
+  for (const item of known) {
+    if (text.includes(item.key)) return item.label;
+  }
+  return 'General';
+};
+
 const parseCsvLine = (line) => {
   const result = [];
   let current = '';
@@ -217,6 +310,128 @@ const readImageFileAsDataUrl = (file, cb) => {
   reader.readAsDataURL(file);
 };
 
+// Generador de PDF real con jsPDF si está disponible o descarga HTML/PDF limpia
+const downloadCotizacionPdfFile = async ({
+  fileNameBase,
+  folio,
+  fecha,
+  cliente,
+  contacto,
+  telefono,
+  correo,
+  direccion,
+  impresionGlobalLabel,
+  ejecutivoNombre,
+  notas,
+  lines,
+  showSubtotal,
+  subtotalVal,
+  showEnvio,
+  envioVal,
+  showIva,
+  ivaVal,
+  showTotal,
+  totalVal
+}) => {
+  const safeName = `${fileNameBase.replace(/[^a-zA-Z0-9ÁÉÍÓÚáéíóúñÑ _-]/g, '').trim().replace(/\s+/g, '_')}.pdf`;
+
+  try {
+    const jsPdfModule = await import('jspdf');
+    const JsPDFCtor = jsPdfModule.jsPDF || jsPdfModule.default;
+    if (JsPDFCtor) {
+      const pdf = new JsPDFCtor({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+      pdf.setFillColor(43, 90, 69);
+      pdf.rect(10, 10, 259, 12, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(13);
+      pdf.text(`LA PAJARITA - COTIZACIÓN #${folio}`, 14, 18);
+
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(9);
+      pdf.text(`FECHA: ${fecha}`, 225, 18);
+      pdf.text(`CLIENTE: ${toUpper(cliente || 'GENERAL')}`, 14, 28);
+      pdf.text(`CONTACTO: ${toUpper(contacto || '-')}`, 14, 33);
+      pdf.text(`TELÉFONO: ${toUpper(telefono || '-')}   CORREO: ${toUpper(correo || '-')}`, 14, 38);
+      pdf.text(`DIRECCIÓN: ${toUpper(direccion || '-')}`, 14, 43);
+      pdf.text(`EJECUTIVO: ${toUpper(ejecutivoNombre || '-')}`, 180, 28);
+
+      let y = 52;
+      pdf.setFillColor(235, 243, 239);
+      pdf.rect(10, y - 4, 259, 7, 'F');
+      pdf.setFontSize(8);
+      pdf.text('SKU', 12, y);
+      pdf.text('DESCRIPCIÓN', 42, y);
+      pdf.text('PRES.', 140, y);
+      pdf.text('CANT.', 158, y);
+      pdf.text('IMPRESIÓN', 174, y);
+      pdf.text('P. UNIT.', 215, y);
+      pdf.text('IMPORTE', 244, y);
+      y += 6;
+
+      lines.forEach((l) => {
+        if (y > 175) return;
+        pdf.text(String(l.sku || ''), 12, y);
+        pdf.text(String(l.descripcion || '').slice(0, 52), 42, y);
+        pdf.text(String(l.unidadVenta || 'caja'), 140, y);
+        pdf.text(String(l.cantidad || 0), 160, y);
+        pdf.text(String(l.impresionLabel || impresionGlobalLabel || '').slice(0, 22), 174, y);
+        pdf.text(formatCurrency(l.precioNormalUnidad), 215, y);
+        pdf.text(formatCurrency(l.importeNormal), 244, y);
+        y += 5.5;
+      });
+
+      y += 4;
+      if (showSubtotal) {
+        pdf.text(`SUBTOTAL: ${formatCurrency(subtotalVal)}`, 210, y);
+        y += 5;
+      }
+      if (showEnvio) {
+        pdf.text(`ENVÍO: ${formatCurrency(envioVal)}`, 210, y);
+        y += 5;
+      }
+      if (showIva) {
+        pdf.text(`IVA (16%): ${formatCurrency(ivaVal)}`, 210, y);
+        y += 5;
+      }
+      if (showTotal) {
+        pdf.setFontSize(10);
+        pdf.text(`TOTAL GENERAL: ${formatCurrency(totalVal)}`, 210, y + 1);
+      }
+
+      pdf.save(safeName);
+      return;
+    }
+  } catch {
+    // Fallback abajo si jspdf no está instalado en el entorno
+  }
+
+  const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeName}</title></head><body style="font-family:sans-serif;padding:20px;">
+    <h2>LA PAJARITA — COTIZACIÓN #${folio}</h2>
+    <p><strong>Fecha:</strong> ${fecha} | <strong>Cliente:</strong> ${toUpper(cliente)}</p>
+    <p><strong>Contacto:</strong> ${toUpper(contacto)} | <strong>Tel:</strong> ${toUpper(telefono)} | <strong>Correo:</strong> ${toUpper(correo)}</p>
+    <p><strong>Dirección:</strong> ${toUpper(direccion)}</p>
+    <table border="1" cellpadding="6" cellspacing="0" width="100%" style="border-collapse:collapse;font-size:12px;">
+      <thead><tr><th>SKU</th><th>Descripción</th><th>Unidad</th><th>Cant.</th><th>Impresión</th><th>Importe</th></tr></thead>
+      <tbody>${lines.map((l) => `<tr><td>${l.sku}</td><td>${l.descripcion}</td><td>${l.unidadVenta}</td><td>${l.cantidad}</td><td>${l.impresionLabel}</td><td>${formatCurrency(l.importeNormal)}</td></tr>`).join('')}</tbody>
+    </table>
+    <div style="margin-top:16px;text-align:right;font-size:13px;">
+      ${showSubtotal ? `<div>Subtotal: ${formatCurrency(subtotalVal)}</div>` : ''}
+      ${showEnvio ? `<div>Envío: ${formatCurrency(envioVal)}</div>` : ''}
+      ${showIva ? `<div>IVA (16%): ${formatCurrency(ivaVal)}</div>` : ''}
+      ${showTotal ? `<div><strong>Total: ${formatCurrency(totalVal)}</strong></div>` : ''}
+    </div>
+    <pre style="font-size:10px;white-space:pre-wrap;margin-top:16px;">${notas}</pre>
+  </body></html>`;
+
+  const blob = new Blob([htmlDoc], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = safeName;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -226,18 +441,22 @@ export default function App() {
   const [clients, setClients] = useState([]);
   const [ejecutivos, setEjecutivos] = useState(INITIAL_EJECUTIVOS);
   const [orders, setOrders] = useState([]);
+  const [quotesRecord, setQuotesRecord] = useState([]);
   const [nextAvailableFolio, setNextAvailableFolio] = useState(188);
   const [loadingSeed, setLoadingSeed] = useState(false);
 
-  // Filtros globales
+  // Filtros globales de catálogo
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSize, setFilterSize] = useState('Todos');
   const [filterMaterial, setFilterMaterial] = useState('Todos');
+  const [filterColor, setFilterColor] = useState('Todos');
+  const [filterCollection, setFilterCollection] = useState('Todos');
 
   // Filtros Dashboard de Ventas
   const todayStr = new Date().toISOString().split('T')[0];
+  const currentYear = String(new Date().getFullYear());
   const [salesMode, setSalesMode] = useState('mensual');
-  const [salesYear, setSalesYear] = useState(String(new Date().getFullYear()));
+  const [salesYear, setSalesYear] = useState(currentYear);
   const [salesMonth, setSalesMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
   const [reportType, setReportType] = useState('general');
   const [selectedDistributorReport, setSelectedDistributorReport] = useState('Todos');
@@ -276,7 +495,19 @@ export default function App() {
   });
   const [showProdModal, setShowProdModal] = useState(false);
 
-  const [newClient, setNewClient] = useState({ nombre: '', tipo: 'Distribuidor', descuento: 30, contacto: '', telefono: '', correo: '', rfc: '', direccion: '' });
+  const [newClient, setNewClient] = useState({
+    nombre: '',
+    tipo: 'Distribuidor',
+    descuento: 30,
+    contacto: '',
+    telefono: '',
+    correo: '',
+    rfc: '',
+    direccionEnvio: { ...EMPTY_ADDRESS },
+    direccionFacturacion: { ...EMPTY_ADDRESS },
+    mismaDireccion: true
+  });
+  const [editingClientId, setEditingClientId] = useState(null);
   const [showClientModal, setShowClientModal] = useState(false);
 
   const [newEjec, setNewEjec] = useState({ nombre: '', firmaUrl: '' });
@@ -292,16 +523,26 @@ export default function App() {
   const [cotCorreoManual, setCotCorreoManual] = useState('');
   const [cotDireccionManual, setCotDireccionManual] = useState('');
   const [cotImpresion, setCotImpresion] = useState('sin');
+  const [cotEnvio, setCotEnvio] = useState(0);
+  const [showCotSubtotal, setShowCotSubtotal] = useState(true);
+  const [showCotEnvio, setShowCotEnvio] = useState(true);
+  const [showCotIva, setShowCotIva] = useState(true);
+  const [showCotTotal, setShowCotTotal] = useState(true);
   const [cotEjecutivoId, setCotEjecutivoId] = useState('marijose');
   const [cotNotas, setCotNotas] = useState(DEFAULT_NOTAS);
-  const [cotItems, setCotItems] = useState([{ sku: '', unidadVenta: 'caja', cantidad: 1, fotoRef: '' }]);
+  const [cotItems, setCotItems] = useState([
+    { sku: '', unidadVenta: 'caja', cantidad: 1, impresion: null, fotoRef: '' }
+  ]);
+  const [cotSubTab, setCotSubTab] = useState('editor'); // 'editor' | 'record'
 
-  // Estado Orden de Pedido
+  // Estado Orden de Pedido (Solicitud de Pedido)
   const [ordFolio, setOrdFolio] = useState(188);
   const [ordFecha, setOrdFecha] = useState(todayStr);
   const [ordClientId, setOrdClientId] = useState('');
   const [ordRecoge, setOrdRecoge] = useState('NO');
   const [ordEnvio, setOrdEnvio] = useState(0);
+  const [ordShowPrices, setOrdShowPrices] = useState(true);
+  const [ordNotas, setOrdNotas] = useState('');
   const [ordEjecutivo, setOrdEjecutivo] = useState('Ileana Fernández');
   const [ordItems, setOrdItems] = useState([{ sku: '', cajas: 1, customDesc: null }]);
 
@@ -348,6 +589,14 @@ export default function App() {
         setEjecutivos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       }
     });
+    const unsubQuotes = onSnapshot(collection(db, 'cotizaciones'), (snap) => {
+      const qList = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      qList.sort((a, b) => (Number(b.folio) || 0) - (Number(a.folio) || 0));
+      setQuotesRecord(qList);
+      const maxFolio = qList.reduce((m, item) => Math.max(m, Number(item.folio) || 1000), 1000);
+      setCotFolio(maxFolio + 1);
+    });
+
     let unsubOrd = () => {};
     if (isAdmin) {
       unsubOrd = onSnapshot(collection(db, 'pedidos'), (snap) => {
@@ -372,25 +621,81 @@ export default function App() {
       unsubInv();
       unsubCli();
       unsubEjec();
+      unsubQuotes();
       unsubOrd();
     };
   }, [user, isAdmin]);
+
+  // Opciones dinámicas de Color y Colección a partir del inventario
+  const colorOptions = useMemo(() => {
+    const set = new Set(['Todos']);
+    inventory.forEach((p) => {
+      const c = extractColor(p.sku, p.descripcion);
+      if (c && c !== 'Otro') set.add(c);
+    });
+    set.add('Otro');
+    return Array.from(set);
+  }, [inventory]);
+
+  const collectionOptions = useMemo(() => {
+    const set = new Set(['Todos']);
+    inventory.forEach((p) => {
+      const col = extractCollection(p.sku, p.descripcion);
+      if (col) set.add(col);
+    });
+    return Array.from(set);
+  }, [inventory]);
 
   const handleSelectCotClient = (id) => {
     setCotClientId(id);
     const found = clients.find((c) => c.id === id);
     if (found) {
-      setCotClienteManual(found.nombre || '');
-      setCotContactoManual(found.contacto || '');
-      setCotTelefonoManual(found.telefono || '');
+      setCotClienteManual(toUpper(found.nombre || ''));
+      setCotContactoManual(toUpper(found.contacto || ''));
+      setCotTelefonoManual(toUpper(found.telefono || ''));
       setCotCorreoManual(found.correo || '');
-      setCotDireccionManual(found.direccion || '');
+      const envStr = formatStructuredAddress(found.direccionEnvio) || toUpper(found.direccion || '');
+      setCotDireccionManual(envStr);
     } else {
       setCotClienteManual('');
       setCotContactoManual('');
       setCotTelefonoManual('');
       setCotCorreoManual('');
       setCotDireccionManual('');
+    }
+  };
+
+  // Autocompletado de Municipio / Estado por CP de 5 dígitos (API gratuita)
+  const lookupCpMexico = async (cpValue, targetField, addressType) => {
+    const cleanCp = String(cpValue || '').replace(/\D/g, '').slice(0, 5);
+    if (cleanCp.length !== 5) return;
+    try {
+      const res = await fetch(`https://api.zippopotam.us/mx/${cleanCp}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const place = data?.places?.[0];
+      if (!place) return;
+      const muni = toUpper(place['place name'] || '');
+      const rawState = toUpper(place['state'] || '');
+      const matchedState =
+        ESTADOS_MEXICO.find((st) => st.includes(rawState) || rawState.includes(st)) || rawState;
+
+      setNewClient((prev) => {
+        const currentAddr = prev[addressType] || { ...EMPTY_ADDRESS };
+        const updatedAddr = {
+          ...currentAddr,
+          cp: cleanCp,
+          municipio: muni || currentAddr.municipio,
+          estado: matchedState || currentAddr.estado
+        };
+        const nextState = { ...prev, [addressType]: updatedAddr };
+        if (prev.mismaDireccion && addressType === 'direccionEnvio') {
+          nextState.direccionFacturacion = { ...updatedAddr };
+        }
+        return nextState;
+      });
+    } catch {
+      // Sin conexión o CP no encontrado en API externa: continúa con selección manual
     }
   };
 
@@ -579,16 +884,81 @@ export default function App() {
     setShowProdModal(false);
   };
 
+  const openNewClientModal = () => {
+    setEditingClientId(null);
+    setNewClient({
+      nombre: '',
+      tipo: 'Distribuidor',
+      descuento: 30,
+      contacto: '',
+      telefono: '',
+      correo: '',
+      rfc: '',
+      direccionEnvio: { ...EMPTY_ADDRESS },
+      direccionFacturacion: { ...EMPTY_ADDRESS },
+      mismaDireccion: true
+    });
+    setShowClientModal(true);
+  };
+
+  const openEditClientModal = (cli) => {
+    setEditingClientId(cli.id);
+    const envioObj = cli.direccionEnvio ? { ...EMPTY_ADDRESS, ...cli.direccionEnvio } : { ...EMPTY_ADDRESS, calle: toUpper(cli.direccion || '') };
+    const factObj = cli.direccionFacturacion ? { ...EMPTY_ADDRESS, ...cli.direccionFacturacion } : { ...envioObj };
+    setNewClient({
+      nombre: toUpper(cli.nombre || ''),
+      tipo: cli.tipo || 'Distribuidor',
+      descuento: Number(cli.descuento) || 0,
+      contacto: toUpper(cli.contacto || ''),
+      telefono: toUpper(cli.telefono || ''),
+      correo: cli.correo || '',
+      rfc: toUpper(cli.rfc || ''),
+      direccionEnvio: envioObj,
+      direccionFacturacion: factObj,
+      mismaDireccion: JSON.stringify(envioObj) === JSON.stringify(factObj)
+    });
+    setShowClientModal(true);
+  };
+
   const handleSaveClient = async (e) => {
     e.preventDefault();
     if (!isAdmin || !newClient.nombre) return;
-    const id = newClient.nombre.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const id = editingClientId || newClient.nombre.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const envioUpper = {
+      calle: toUpper(newClient.direccionEnvio.calle),
+      numExt: toUpper(newClient.direccionEnvio.numExt),
+      numInt: toUpper(newClient.direccionEnvio.numInt),
+      colonia: toUpper(newClient.direccionEnvio.colonia),
+      cp: toUpper(newClient.direccionEnvio.cp),
+      municipio: toUpper(newClient.direccionEnvio.municipio),
+      estado: toUpper(newClient.direccionEnvio.estado)
+    };
+    const factUpper = newClient.mismaDireccion
+      ? { ...envioUpper }
+      : {
+          calle: toUpper(newClient.direccionFacturacion.calle),
+          numExt: toUpper(newClient.direccionFacturacion.numExt),
+          numInt: toUpper(newClient.direccionFacturacion.numInt),
+          colonia: toUpper(newClient.direccionFacturacion.colonia),
+          cp: toUpper(newClient.direccionFacturacion.cp),
+          municipio: toUpper(newClient.direccionFacturacion.municipio),
+          estado: toUpper(newClient.direccionFacturacion.estado)
+        };
+
     await setDoc(doc(db, 'clientes', id), {
-      ...newClient,
-      descuento: Number(newClient.descuento) || 0
+      nombre: toUpper(newClient.nombre),
+      tipo: newClient.tipo,
+      descuento: Number(newClient.descuento) || 0,
+      contacto: toUpper(newClient.contacto),
+      telefono: toUpper(newClient.telefono),
+      correo: newClient.correo.trim(),
+      rfc: toUpper(newClient.rfc),
+      direccionEnvio: envioUpper,
+      direccionFacturacion: factUpper,
+      direccion: formatStructuredAddress(envioUpper)
     });
-    setNewClient({ nombre: '', tipo: 'Distribuidor', descuento: 30, contacto: '', telefono: '', correo: '', rfc: '', direccion: '' });
     setShowClientModal(false);
+    setEditingClientId(null);
   };
 
   const handleSaveEjecutivo = async (e) => {
@@ -600,8 +970,6 @@ export default function App() {
     setShowEjecModal(false);
   };
 
-  // Eliminar pedido: si era el último folio creado, reutiliza ese número para el siguiente pedido;
-  // si ya existen folios posteriores, solo devuelve stock y elimina el registro.
   const handleDeleteOrder = async (order) => {
     if (!isAdmin) return;
     const deletedFolio = Number(order.folio) || 0;
@@ -644,7 +1012,6 @@ export default function App() {
     }
   };
 
-  // Abrir modal de edición al hacer clic en un pedido
   const openEditOrderModal = (ord) => {
     setEditingOrder(ord);
     setEditComentarios(ord.comentarios || '');
@@ -667,7 +1034,6 @@ export default function App() {
     setEditingOrder(null);
   };
 
-  // Guardar pedido pasado sin modificar el inventario
   const selectedPastClient = useMemo(
     () => clients.find((c) => c.id === pastClientId) || null,
     [clients, pastClientId]
@@ -720,7 +1086,7 @@ export default function App() {
       folio: Number(pastFolio),
       fecha: pastFecha || todayStr,
       cliente: selectedPastClient.nombre,
-      direccion: selectedPastClient.direccion || '',
+      direccion: formatStructuredAddress(selectedPastClient.direccionEnvio) || selectedPastClient.direccion || '',
       recogeBodega: pastRecoge,
       ejecutivo: pastEjecutivo,
       usuarioCorreo: user?.email || '',
@@ -755,18 +1121,25 @@ export default function App() {
         p.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
       const size = extractSize(p.sku, p.descripcion);
       const mat = extractMaterial(p.sku, p.descripcion);
+      const col = extractColor(p.sku, p.descripcion);
+      const collectionName = extractCollection(p.sku, p.descripcion);
+
       const matchSize = filterSize === 'Todos' || size === filterSize;
       const matchMat = filterMaterial === 'Todos' || mat.toLowerCase() === filterMaterial.toLowerCase();
-      return matchText && matchSize && matchMat;
+      const matchColor = filterColor === 'Todos' || col.toLowerCase() === filterColor.toLowerCase();
+      const matchCollection =
+        filterCollection === 'Todos' || collectionName.toLowerCase() === filterCollection.toLowerCase();
+
+      return matchText && matchSize && matchMat && matchColor && matchCollection;
     });
-  }, [inventory, searchTerm, filterSize, filterMaterial]);
+  }, [inventory, searchTerm, filterSize, filterMaterial, filterColor, filterCollection]);
 
   // Historial de productos por cliente/distribuidor
   const clientProductHistory = useMemo(() => {
     if (!selectedHistoryClient) return [];
     const prodMap = {};
     orders
-      .filter((o) => o.cliente === selectedHistoryClient)
+      .filter((o) => toUpper(o.cliente) === toUpper(selectedHistoryClient))
       .forEach((o) => {
         (o.partidas || []).forEach((line) => {
           const key = line.sku;
@@ -792,11 +1165,11 @@ export default function App() {
   }, [orders, selectedHistoryClient]);
 
   const loadClientHistoryIntoCotizador = (clientName) => {
-    const cli = clients.find((c) => c.nombre === clientName);
+    const cli = clients.find((c) => toUpper(c.nombre) === toUpper(clientName));
     if (cli) {
       handleSelectCotClient(cli.id);
     } else {
-      setCotClienteManual(clientName);
+      setCotClienteManual(toUpper(clientName));
     }
     if (clientProductHistory.length > 0) {
       setCotItems(
@@ -806,22 +1179,35 @@ export default function App() {
             sku: item.sku,
             unidadVenta: 'caja',
             cantidad: Math.max(1, Math.round(item.totalCajas / Math.max(1, item.vecesPedido))),
+            impresion: null,
             fotoRef: invMatch?.fotoUrl || ''
           };
         })
       );
     }
+    setCotSubTab('editor');
     setActiveTab('cotizador');
   };
 
-  // Cálculos Cotizador
+  // Cálculos Cotizador con impresión por SKU + envío debajo de subtotal en IVA y Total
   const selectedCotClient = useMemo(
     () => clients.find((c) => c.id === cotClientId) || { descuento: 0 },
     [clients, cotClientId]
   );
 
-  const calcLineCotizacion = (prod, unidadVenta, cantidad) => {
-    if (!prod) return { precioNormalUnidad: 0, precioUnitarioPieza: 0, totalUds: 0, importeNormal: 0 };
+  const calcLineCotizacion = (prod, unidadVenta, cantidad, rowImpresion) => {
+    const impMode = rowImpresion || cotImpresion;
+    const impMeta = MODALIDADES_IMPRESION.find((m) => m.id === impMode) || MODALIDADES_IMPRESION[0];
+    if (!prod) {
+      return {
+        precioNormalUnidad: 0,
+        precioUnitarioPieza: 0,
+        totalUds: 0,
+        importeNormal: 0,
+        impresionMode: impMode,
+        impresionLabel: impMeta.short
+      };
+    }
     const costoCajaBase = Number(prod.costoCaja) || 0;
     const pCaja = Number(prod.pCaja) || 1;
     const uPq = Number(prod.uPq) || 0;
@@ -832,7 +1218,7 @@ export default function App() {
     const totalUds = unidadVenta === 'paquete' ? uPq * cantidad : uPq * pCaja * cantidad;
 
     let precioConImpresion = baseSeleccionada;
-    switch (cotImpresion) {
+    switch (impMode) {
       case '1tinta':
         precioConImpresion = baseSeleccionada * 1.25;
         break;
@@ -856,14 +1242,16 @@ export default function App() {
       precioNormalUnidad: precioConImpresion,
       precioUnitarioPieza,
       totalUds,
-      importeNormal
+      importeNormal,
+      impresionMode: impMode,
+      impresionLabel: impMeta.short
     };
   };
 
   const cotSubtotalNormal = useMemo(() => {
     return cotItems.reduce((acc, row) => {
       const prod = inventory.find((p) => p.sku === row.sku);
-      const { importeNormal } = calcLineCotizacion(prod, row.unidadVenta, Number(row.cantidad) || 0);
+      const { importeNormal } = calcLineCotizacion(prod, row.unidadVenta, Number(row.cantidad) || 0, row.impresion);
       return acc + importeNormal;
     }, 0);
   }, [cotItems, inventory, cotImpresion]);
@@ -871,10 +1259,107 @@ export default function App() {
   const descuentoPctCot = Number(selectedCotClient.descuento) || 0;
   const cotDescuentoMonto = cotSubtotalNormal * (descuentoPctCot / 100);
   const cotSubtotalNeto = cotSubtotalNormal - cotDescuentoMonto;
-  const cotIva = cotSubtotalNeto * 0.16;
-  const cotTotalGeneral = cotSubtotalNeto + cotIva;
+  const cotEnvioNum = Number(cotEnvio) || 0;
+  const cotBaseMasEnvio = cotSubtotalNeto + cotEnvioNum;
+  const cotIva = cotBaseMasEnvio * 0.16;
+  const cotTotalGeneral = cotBaseMasEnvio + cotIva;
 
-  // Cálculos Orden de Pedido
+  const ejecutivoActual = ejecutivos.find((e) => e.id === cotEjecutivoId) || ejecutivos[0];
+  const modalidadGlobalShort = MODALIDADES_IMPRESION.find((m) => m.id === cotImpresion)?.short || 'Sin impresión';
+  const quoteYear = String(cotFecha || todayStr).slice(0, 4) || currentYear;
+  const clientFileNamePart = toUpper(cotClienteManual || selectedCotClient?.nombre || 'CLIENTE').replace(/\s+/g, '_');
+  const suggestedQuoteFileName = `Cotizacion_${clientFileNamePart}_${quoteYear}`;
+
+  const saveQuoteToRecord = async (accion) => {
+    const detailedLines = cotItems
+      .map((row) => {
+        const prod = inventory.find((p) => p.sku === row.sku);
+        const qty = Number(row.cantidad) || 0;
+        if (!prod && !row.sku) return null;
+        const c = calcLineCotizacion(prod, row.unidadVenta, qty, row.impresion);
+        return {
+          sku: row.sku,
+          descripcion: prod?.descripcion || '',
+          unidadVenta: row.unidadVenta,
+          cantidad: qty,
+          impresion: c.impresionMode,
+          impresionLabel: c.impresionLabel,
+          precioUnitarioPieza: c.precioUnitarioPieza,
+          precioNormalUnidad: c.precioNormalUnidad,
+          importeNormal: c.importeNormal
+        };
+      })
+      .filter(Boolean);
+
+    const payload = {
+      folio: Number(cotFolio) || 1001,
+      fecha: cotFecha || todayStr,
+      cliente: toUpper(cotClienteManual || selectedCotClient?.nombre || 'CLIENTE GENERAL'),
+      contacto: toUpper(cotContactoManual),
+      telefono: toUpper(cotTelefonoManual),
+      correo: cotCorreoManual,
+      direccion: toUpper(cotDireccionManual),
+      ejecutivo: ejecutivoActual?.nombre || '',
+      partidas: detailedLines,
+      subtotal: cotSubtotalNormal,
+      descuentoMonto: cotDescuentoMonto,
+      envio: cotEnvioNum,
+      iva: cotIva,
+      total: cotTotalGeneral,
+      visibilidad: {
+        subtotal: showCotSubtotal,
+        envio: showCotEnvio,
+        iva: showCotIva,
+        total: showCotTotal
+      },
+      notas: cotNotas,
+      accion,
+      usuarioCorreo: user?.email || '',
+      creadoEn: new Date().toISOString()
+    };
+
+    await setDoc(doc(collection(db, 'cotizaciones')), payload);
+    setCotFolio((Number(cotFolio) || 1001) + 1);
+    return detailedLines;
+  };
+
+  const handlePrintCotizacion = async () => {
+    await saveQuoteToRecord('Imprimir');
+    const prevTitle = document.title;
+    document.title = suggestedQuoteFileName;
+    window.print();
+    setTimeout(() => {
+      document.title = prevTitle;
+    }, 800);
+  };
+
+  const handleDownloadCotizacionPdf = async () => {
+    const detailedLines = await saveQuoteToRecord('Descargar PDF');
+    await downloadCotizacionPdfFile({
+      fileNameBase: suggestedQuoteFileName,
+      folio: Number(cotFolio) - 1 || cotFolio,
+      fecha: cotFecha,
+      cliente: cotClienteManual || selectedCotClient?.nombre,
+      contacto: cotContactoManual,
+      telefono: cotTelefonoManual,
+      correo: cotCorreoManual,
+      direccion: cotDireccionManual,
+      impresionGlobalLabel: modalidadGlobalShort,
+      ejecutivoNombre: ejecutivoActual?.nombre,
+      notas: cotNotas,
+      lines: detailedLines,
+      showSubtotal: showCotSubtotal,
+      subtotalVal: cotSubtotalNeto,
+      showEnvio: showCotEnvio,
+      envioVal: cotEnvioNum,
+      showIva: showCotIva,
+      ivaVal: cotIva,
+      showTotal: showCotTotal,
+      totalVal: cotTotalGeneral
+    });
+  };
+
+  // Cálculos Orden de Pedido (Solicitud de Pedido)
   const selectedOrdClient = useMemo(
     () => clients.find((c) => c.id === ordClientId) || null,
     [clients, ordClientId]
@@ -890,8 +1375,9 @@ export default function App() {
     }, 0);
   }, [ordItems, inventory, selectedOrdClient]);
 
-  const ordIva = (ordSubtotal + (Number(ordEnvio) || 0)) * 0.16;
-  const ordTotal = ordSubtotal + (Number(ordEnvio) || 0) + ordIva;
+  const ordEnvioNum = Number(ordEnvio) || 0;
+  const ordIva = ordShowPrices ? (ordSubtotal + ordEnvioNum) * 0.16 : 0;
+  const ordTotal = ordShowPrices ? ordSubtotal + ordEnvioNum + ordIva : ordEnvioNum;
 
   const handleConfirmOrder = async () => {
     if (!isAdmin) return;
@@ -907,6 +1393,8 @@ export default function App() {
           prodId: prod.id,
           sku: prod.sku,
           descripcion: prod.descripcion,
+          uPq: Number(prod.uPq) || 0,
+          pCaja: Number(prod.pCaja) || 0,
           stockActual: Number(prod.stock) || 0,
           cajas: Number(row.cajas),
           descuentoPct: descPct,
@@ -919,10 +1407,6 @@ export default function App() {
       .filter(Boolean);
 
     if (!validLines.length) return alert('Agrega al menos un SKU con cantidad de cajas.');
-    const sinStock = validLines.find((l) => l.cajas > l.stockActual);
-    if (sinStock) {
-      return alert(`Stock insuficiente para ${sinStock.sku}. Disponible: ${sinStock.stockActual} cajas.`);
-    }
 
     const utilidadTotal = validLines.reduce((s, l) => s + (Number(l.utilidadLinea) || 0), 0);
 
@@ -932,17 +1416,18 @@ export default function App() {
       folio: Number(ordFolio),
       fecha: ordFecha || todayStr,
       cliente: selectedOrdClient.nombre,
-      direccion: selectedOrdClient.direccion || '',
+      direccion: formatStructuredAddress(selectedOrdClient.direccionEnvio) || selectedOrdClient.direccion || '',
       recogeBodega: ordRecoge,
       ejecutivo: ordEjecutivo,
       usuarioCorreo: user?.email || '',
       partidas: validLines,
       subtotal: ordSubtotal,
-      envio: Number(ordEnvio) || 0,
+      envio: ordEnvioNum,
       iva: ordIva,
       total: ordTotal,
+      mostrarPrecios: ordShowPrices,
       utilidadEstimada: utilidadTotal,
-      comentarios: '',
+      comentarios: ordNotas,
       facturado: 'No',
       numFactura: '',
       pagado: 'No',
@@ -960,17 +1445,18 @@ export default function App() {
     await batch.commit();
     setOrdItems([{ sku: '', cajas: 1, customDesc: null }]);
     setOrdEnvio(0);
-    alert(`Venta / Pedido #${ordFolio} confirmado y stock actualizado.`);
+    setOrdNotas('');
+    alert(`Solicitud de Pedido #${ordFolio} confirmada y stock actualizado.`);
   };
 
   // Analítica Dashboard
   const availableYears = useMemo(() => {
-    const years = new Set([String(new Date().getFullYear())]);
+    const years = new Set([currentYear]);
     orders.forEach((o) => {
       if (o.fecha) years.add(String(o.fecha).slice(0, 4));
     });
     return Array.from(years).sort((a, b) => b.localeCompare(a));
-  }, [orders]);
+  }, [orders, currentYear]);
 
   const filteredSales = useMemo(() => {
     return orders.filter((o) => {
@@ -1109,9 +1595,6 @@ export default function App() {
     );
   }
 
-  const ejecutivoActual = ejecutivos.find((e) => e.id === cotEjecutivoId) || ejecutivos[0];
-  const modalidadShort = MODALIDADES_IMPRESION.find((m) => m.id === cotImpresion)?.short || 'Sin impresión';
-
   const availableTabs = isAdmin
     ? [
         { id: 'inventario', label: 'Inventario', icon: Package },
@@ -1120,7 +1603,7 @@ export default function App() {
         { id: 'cotizador', label: 'Cotizador', icon: FileText },
         { id: 'clientes', label: 'Clientes / Historial', icon: Users },
         { id: 'ejecutivos', label: 'Ejecutivos y Firmas', icon: UserCheck },
-        { id: 'pedido', label: 'Nueva Orden', icon: ShoppingCart },
+        { id: 'pedido', label: 'Solicitud Pedido', icon: ShoppingCart },
         { id: 'record', label: 'Récord Pedidos', icon: History }
       ]
     : [
@@ -1130,6 +1613,129 @@ export default function App() {
 
   const maxMonthlyVal = Math.max(...monthlyChartData.map((d) => d.total), 1);
   const maxTopSkuCajas = Math.max(...topProducts.map((p) => p.cajas), 1);
+
+  const renderAddressFields = (addrType, titleLabel) => {
+    const addr = newClient[addrType] || EMPTY_ADDRESS;
+    const isDisabled = addrType === 'direccionFacturacion' && newClient.mismaDireccion;
+
+    const updateField = (field, rawVal) => {
+      const val = toUpper(rawVal);
+      setNewClient((prev) => {
+        const nextAddr = { ...(prev[addrType] || EMPTY_ADDRESS), [field]: val };
+        const updated = { ...prev, [addrType]: nextAddr };
+        if (prev.mismaDireccion && addrType === 'direccionEnvio') {
+          updated.direccionFacturacion = { ...nextAddr };
+        }
+        return updated;
+      });
+      if (field === 'cp' && val.replace(/\D/g, '').length === 5) {
+        lookupCpMexico(val, field, addrType);
+      }
+    };
+
+    return (
+      <div className="border border-gray-200 rounded-xl p-3 space-y-2.5 bg-gray-50/50">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xs font-bold uppercase text-[#2B5A45]">{titleLabel}</h4>
+          {addrType === 'direccionFacturacion' && (
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold cursor-pointer">
+              <input
+                type="checkbox"
+                checked={newClient.mismaDireccion}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setNewClient((prev) => ({
+                    ...prev,
+                    mismaDireccion: checked,
+                    direccionFacturacion: checked ? { ...prev.direccionEnvio } : prev.direccionFacturacion
+                  }));
+                }}
+              />
+              IGUAL A DIRECCIÓN DE ENVÍO
+            </label>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-6 gap-2 text-xs">
+          <div className="sm:col-span-3">
+            <label className="block text-[10px] font-bold mb-0.5">CALLE</label>
+            <input
+              disabled={isDisabled}
+              value={addr.calle || ''}
+              onChange={(e) => updateField('calle', e.target.value)}
+              placeholder="CALLE"
+              className="w-full border border-gray-300 rounded p-1.5 bg-white uppercase disabled:bg-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold mb-0.5">NÚM. EXT.</label>
+            <input
+              disabled={isDisabled}
+              value={addr.numExt || ''}
+              onChange={(e) => updateField('numExt', e.target.value)}
+              placeholder="EXT."
+              className="w-full border border-gray-300 rounded p-1.5 bg-white uppercase disabled:bg-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold mb-0.5">NÚM. INT.</label>
+            <input
+              disabled={isDisabled}
+              value={addr.numInt || ''}
+              onChange={(e) => updateField('numInt', e.target.value)}
+              placeholder="INT."
+              className="w-full border border-gray-300 rounded p-1.5 bg-white uppercase disabled:bg-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold mb-0.5">CP (5 DÍGITOS)</label>
+            <input
+              disabled={isDisabled}
+              maxLength={5}
+              value={addr.cp || ''}
+              onChange={(e) => updateField('cp', e.target.value)}
+              placeholder="00000"
+              className="w-full border border-gray-300 rounded p-1.5 bg-white uppercase disabled:bg-gray-100"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-[10px] font-bold mb-0.5">COLONIA</label>
+            <input
+              disabled={isDisabled}
+              value={addr.colonia || ''}
+              onChange={(e) => updateField('colonia', e.target.value)}
+              placeholder="COLONIA"
+              className="w-full border border-gray-300 rounded p-1.5 bg-white uppercase disabled:bg-gray-100"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-[10px] font-bold mb-0.5">MUNICIPIO / ALCALDÍA</label>
+            <input
+              disabled={isDisabled}
+              value={addr.municipio || ''}
+              onChange={(e) => updateField('municipio', e.target.value)}
+              placeholder="MUNICIPIO O ALCALDÍA"
+              className="w-full border border-gray-300 rounded p-1.5 bg-white uppercase disabled:bg-gray-100"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-[10px] font-bold mb-0.5">ESTADO</label>
+            <select
+              disabled={isDisabled}
+              value={addr.estado || ''}
+              onChange={(e) => updateField('estado', e.target.value)}
+              className="w-full border border-gray-300 rounded p-1.5 bg-white uppercase disabled:bg-gray-100"
+            >
+              <option value="">-- SELECCIONAR ESTADO --</option>
+              {ESTADOS_MEXICO.map((st) => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-white text-black">
@@ -1141,36 +1747,45 @@ export default function App() {
         }
       `}</style>
 
-      {/* Barra superior */}
-      <header style={{ backgroundColor: '#2B5A45' }} className="text-white px-6 py-3.5 shadow-md no-print">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-white px-2.5 py-1 rounded">
-              <img
-                src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)}
-                alt="La Pajarita"
-                className="h-8 object-contain"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm">Sistema Operativo Interno</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full uppercase font-semibold bg-white/20 text-white">
-                  {isAdmin ? 'Administrador' : 'Consulta / Cotizador'}
-                </span>
+      {/* Barra superior adaptable a celular y escritorio */}
+      <header style={{ backgroundColor: '#2B5A45' }} className="text-white px-3 sm:px-6 py-3 shadow-md no-print">
+        <div className="max-w-7xl mx-auto flex flex-col gap-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="bg-white px-2 py-1 rounded shrink-0">
+                <img
+                  src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)}
+                  alt="La Pajarita"
+                  className="h-7 sm:h-8 object-contain"
+                  referrerPolicy="no-referrer"
+                />
               </div>
-              <p className="text-xs text-white/80">{user.email}</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-xs sm:text-sm truncate">La Pajarita • Operativo</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full uppercase font-semibold bg-white/20 text-white">
+                    {isAdmin ? 'Admin' : 'Consulta'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/80 truncate">{user.email}</p>
+              </div>
             </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-900/70 hover:bg-red-800 text-white shrink-0"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Salir
+            </button>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
             {availableTabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition ${
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition shrink-0 ${
                     activeTab === tab.id ? 'bg-white text-black font-bold shadow' : 'bg-black/20 text-white hover:bg-black/30'
                   }`}
                 >
@@ -1179,17 +1794,11 @@ export default function App() {
                 </button>
               );
             })}
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-red-900/70 hover:bg-red-800 text-white"
-            >
-              <LogOut className="w-3.5 h-3.5" /> Salir
-            </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-4 md:p-6 bg-white">
+      <main className="max-w-7xl mx-auto p-3 sm:p-6 bg-white">
         {isAdmin && inventory.length === 0 && (
           <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4 no-print">
             <div>
@@ -1208,87 +1817,154 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 1: INVENTARIO */}
+        {/* TAB 1: INVENTARIO CON FILTROS DE TAMAÑO, MATERIAL, COLOR Y COLECCIÓN */}
         {activeTab === 'inventario' && (
           <div className="space-y-4">
-            <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative flex-1 min-w-[220px]">
-                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por SKU o descripción..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-black" />
+            <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200 space-y-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por SKU o descripción (medida, color, colección)..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-black bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <Filter className="w-3.5 h-3.5 text-[#2B5A45] shrink-0" />
                   <select
                     value={filterSize}
                     onChange={(e) => setFilterSize(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-black"
+                    className="w-full border border-gray-300 rounded-lg px-2 py-2 bg-white text-black"
                   >
-                    {TAMANOS_FILTER.map((t) => <option key={t} value={t}>Tamaño: {t}</option>)}
-                  </select>
-                  <select
-                    value={filterMaterial}
-                    onChange={(e) => setFilterMaterial(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white text-black"
-                  >
-                    {MATERIALES_FILTER.map((m) => <option key={m} value={m}>Material: {m}</option>)}
+                    {TAMANOS_FILTER.map((t) => <option key={t} value={t}>Medida: {t}</option>)}
                   </select>
                 </div>
 
-                {isAdmin && (
-                  <div className="flex flex-wrap gap-2">
-                    <label className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium cursor-pointer">
-                      <Upload className="w-3.5 h-3.5" /> Importar CSV
-                      <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
-                    </label>
-                    <button
-                      onClick={() =>
-                        exportToCSV(
-                          'inventario_la_pajarita.csv',
-                          inventory.map((p) => ({
-                            SKU: p.sku,
-                            Descripción: p.descripcion,
-                            STOCK: p.stock,
-                            'Precio por Paq': p.precioPaq,
-                            'Costo por Caja': p.costoCaja,
-                            'Costo Unidad': p.costoUnidad,
-                            'U/PQ': p.uPq,
-                            'P/CAJA': p.pCaja,
-                            'Total de Prod en Caja': p.totalProdCaja,
-                            'C/PALET': p.cPalet,
-                            Volumen: p.volumen,
-                            Peso: p.peso
-                          }))
-                        )
-                      }
-                      className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium"
-                    >
-                      <Download className="w-3.5 h-3.5" /> CSV
-                    </button>
-                    <button
-                      onClick={() => setShowProdModal(true)}
-                      style={{ backgroundColor: '#2B5A45' }}
-                      className="flex items-center gap-1.5 text-white px-3 py-2 rounded-lg text-xs font-medium"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Nuevo SKU
-                    </button>
-                  </div>
-                )}
+                <select
+                  value={filterMaterial}
+                  onChange={(e) => setFilterMaterial(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-2 py-2 bg-white text-black"
+                >
+                  {MATERIALES_FILTER.map((m) => <option key={m} value={m}>Material: {m}</option>)}
+                </select>
+
+                <select
+                  value={filterColor}
+                  onChange={(e) => setFilterColor(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-2 py-2 bg-white text-black font-medium"
+                >
+                  {colorOptions.map((c) => <option key={c} value={c}>Color: {c}</option>)}
+                </select>
+
+                <select
+                  value={filterCollection}
+                  onChange={(e) => setFilterCollection(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-2 py-2 bg-white text-black font-medium"
+                >
+                  {collectionOptions.map((col) => <option key={col} value={col}>Colección: {col}</option>)}
+                </select>
               </div>
+
+              {isAdmin && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <label className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium cursor-pointer">
+                    <Upload className="w-3.5 h-3.5" /> Importar CSV
+                    <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
+                  </label>
+                  <button
+                    onClick={() =>
+                      exportToCSV(
+                        'inventario_la_pajarita.csv',
+                        inventory.map((p) => ({
+                          SKU: p.sku,
+                          Descripción: p.descripcion,
+                          Color: extractColor(p.sku, p.descripcion),
+                          Colección: extractCollection(p.sku, p.descripcion),
+                          STOCK: p.stock,
+                          'Precio por Paq': p.precioPaq,
+                          'Costo por Caja': p.costoCaja,
+                          'Costo Unidad': p.costoUnidad,
+                          'U/PQ': p.uPq,
+                          'P/CAJA': p.pCaja,
+                          'Total de Prod en Caja': p.totalProdCaja,
+                          'C/PALET': p.cPalet,
+                          Volumen: p.volumen,
+                          Peso: p.peso
+                        }))
+                      )
+                    }
+                    className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium"
+                  >
+                    <Download className="w-3.5 h-3.5" /> CSV
+                  </button>
+                  <button
+                    onClick={() => setShowProdModal(true)}
+                    style={{ backgroundColor: '#2B5A45' }}
+                    className="flex items-center gap-1.5 text-white px-3 py-2 rounded-lg text-xs font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Nuevo SKU
+                  </button>
+                </div>
+              )}
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            {/* Vista amigable en celular (tarjetas) */}
+            <div className="grid grid-cols-1 gap-3 md:hidden">
+              {filteredInventory.map((item) => {
+                const pPaq = Number(item.precioPaq) > 0
+                  ? Number(item.precioPaq)
+                  : (Number(item.pCaja) > 0 ? Number(item.costoCaja) / Number(item.pCaja) : Number(item.costoCaja) || 0);
+                return (
+                  <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-3.5 space-y-2 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-mono font-bold text-sm text-black">{item.sku}</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-[#2B5A45] font-semibold">
+                            {extractColor(item.sku, item.descripcion)}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-800 font-semibold">
+                            {extractCollection(item.sku, item.descripcion)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-gray-500 block">STOCK</span>
+                        {isAdmin ? (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => adjustStock(item, -1)} className="px-2 py-0.5 border rounded font-bold">-</button>
+                            <span className="font-bold text-sm px-1">{item.stock}</span>
+                            <button onClick={() => adjustStock(item, 1)} className="px-2 py-0.5 border rounded font-bold">+</button>
+                          </div>
+                        ) : (
+                          <span className="font-bold text-sm">{item.stock}</span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-800 leading-snug">{item.descripcion}</p>
+                    <div className="grid grid-cols-2 gap-2 text-[11px] bg-gray-50 rounded-lg p-2">
+                      <div>Paq: <strong>{formatCurrency(pPaq)}</strong></div>
+                      <div>Caja: <strong>{formatCurrency(item.costoCaja)}</strong></div>
+                      <div>U/PQ: <strong>{item.uPq || 0}</strong></div>
+                      <div>P/CAJA: <strong>{item.pCaja || 0}</strong></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Vista de tabla completa en escritorio */}
+            <div className="hidden md:block bg-white rounded-xl border border-gray-200 overflow-x-auto">
               <table className="w-full text-xs text-left whitespace-nowrap">
                 <thead style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[11px]">
                   <tr>
                     <th className="px-3 py-3">SKU</th>
                     <th className="px-3 py-3">Descripción</th>
+                    <th className="px-3 py-3 text-center">Color / Col.</th>
                     <th className="px-3 py-3 text-center">Foto Ref.</th>
                     <th className="px-3 py-3 text-center">STOCK</th>
                     <th className="px-3 py-3 text-right">Precio por Paq</th>
@@ -1312,6 +1988,10 @@ export default function App() {
                       <tr key={item.id} className="hover:bg-gray-50">
                         <td className="px-3 py-2.5 font-mono font-bold text-black">{item.sku}</td>
                         <td className="px-3 py-2.5 text-[11px] text-black max-w-xs truncate" title={item.descripcion}>{item.descripcion}</td>
+                        <td className="px-3 py-2.5 text-center text-[10px]">
+                          <span className="font-semibold">{extractColor(item.sku, item.descripcion)}</span> •{' '}
+                          <span>{extractCollection(item.sku, item.descripcion)}</span>
+                        </td>
                         <td className="px-3 py-2.5 text-center">
                           <div className="flex items-center justify-center gap-1.5">
                             {item.fotoUrl ? (
@@ -1903,240 +2583,295 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: COTIZADOR */}
+        {/* TAB 4: COTIZADOR + RÉCORD DE COTIZACIONES */}
         {activeTab === 'cotizador' && (
           <div className="space-y-4">
-            <div className="no-print bg-white p-4 rounded-xl border border-gray-200 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3">
-                <h2 className="font-bold text-black">Configuración de Cotización</h2>
-                <button
-                  onClick={() => window.print()}
-                  style={{ backgroundColor: '#2B5A45' }}
-                  className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-xs font-semibold hover:opacity-95"
-                >
-                  <Printer className="w-4 h-4" /> Imprimir / Guardar PDF Horizontal
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-black mb-1">Cliente / Distribuidor Base</label>
-                  <select
-                    value={cotClientId}
-                    onChange={(e) => handleSelectCotClient(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
-                  >
-                    <option value="">-- Cliente Nuevo / Sin Descuento --</option>
-                    {clients.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-black mb-1">Modalidad de Impresión</label>
-                  <select
-                    value={cotImpresion}
-                    onChange={(e) => setCotImpresion(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white font-semibold text-black"
-                  >
-                    {MODALIDADES_IMPRESION.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-black mb-1">Ejecutivo que Firma</label>
-                  <select
-                    value={cotEjecutivoId}
-                    onChange={(e) => setCotEjecutivoId(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
-                  >
-                    {ejecutivos.map((ej) => <option key={ej.id} value={ej.id}>{ej.nombre}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-black mb-1">Filtrar catálogo de SKUs</label>
-                  <div className="flex gap-1">
-                    <select
-                      value={filterSize}
-                      onChange={(e) => setFilterSize(e.target.value)}
-                      className="w-1/2 border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
-                    >
-                      {TAMANOS_FILTER.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    <select
-                      value={filterMaterial}
-                      onChange={(e) => setFilterMaterial(e.target.value)}
-                      className="w-1/2 border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
-                    >
-                      {MATERIALES_FILTER.map((m) => <option key={m} value={m}>{m}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
+            <div className="no-print flex items-center gap-2 bg-white p-2 rounded-xl border border-gray-200 w-fit">
+              <button
+                onClick={() => setCotSubTab('editor')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold ${cotSubTab === 'editor' ? 'bg-[#2B5A45] text-white' : 'text-black hover:bg-gray-100'}`}
+              >
+                Cotizador
+              </button>
+              <button
+                onClick={() => setCotSubTab('record')}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold ${cotSubTab === 'record' ? 'bg-[#2B5A45] text-white' : 'text-black hover:bg-gray-100'}`}
+              >
+                <BookmarkCheck className="w-3.5 h-3.5" /> Récord de Cotizaciones ({quotesRecord.length})
+              </button>
             </div>
 
-            <div className="bg-white border border-gray-300 max-w-6xl mx-auto p-6 space-y-5 text-black">
-              <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-gray-300 pb-4">
-                <div className="shrink-0">
-                  <img
-                    src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)}
-                    alt="Logo La Pajarita"
-                    className="h-16 object-contain"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 flex-1 text-xs">
-                  <div>
-                    <span className="block text-[10px] font-bold uppercase text-black">NOMBRE CLIENTE</span>
-                    <input
-                      type="text"
-                      placeholder="Nombre o Razón Social"
-                      value={cotClienteManual}
-                      onChange={(e) => setCotClienteManual(e.target.value)}
-                      className="w-full font-bold text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5"
-                    />
+            {cotSubTab === 'record' ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+                <h2 className="font-bold text-base text-black">Récord de Cotizaciones Guardadas</h2>
+                {quotesRecord.length === 0 ? (
+                  <p className="text-xs text-gray-500 py-6 text-center">
+                    Al imprimir o descargar PDF una cotización, aparecerá aquí con su folio consecutivo.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {quotesRecord.map((q) => (
+                      <div key={q.id} className="border border-gray-200 rounded-xl p-3.5 text-xs space-y-1.5">
+                        <div className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-100 pb-1.5">
+                          <div>
+                            <span className="font-bold text-sm">Cotización #{q.folio}</span>
+                            <span className="ml-2 font-semibold">{q.cliente}</span>
+                            <span className="ml-2 text-gray-600">{q.fecha} • {q.ejecutivo}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-[#2B5A45] font-semibold">
+                              {q.accion || 'Guardada'}
+                            </span>
+                            <span className="font-bold text-sm">{formatCurrency(q.total)}</span>
+                          </div>
+                        </div>
+                        <div className="text-[11px] text-gray-700">
+                          Partidas: {(q.partidas || []).map((p) => `${p.sku} (${p.cantidad} ${p.unidadVenta}, ${p.impresionLabel})`).join(' • ')}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div>
-                    <span className="block text-[10px] font-bold uppercase text-black">NOMBRE DE CONTACTO</span>
-                    <input
-                      type="text"
-                      placeholder="Nombre de contacto"
-                      value={cotContactoManual}
-                      onChange={(e) => setCotContactoManual(e.target.value)}
-                      className="w-full text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5"
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold uppercase text-black">TELÉFONO</span>
-                    <input
-                      type="text"
-                      placeholder="Teléfono"
-                      value={cotTelefonoManual}
-                      onChange={(e) => setCotTelefonoManual(e.target.value)}
-                      className="w-full text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5"
-                    />
-                  </div>
-                  <div>
-                    <span className="block text-[10px] font-bold uppercase text-black">CORREO</span>
-                    <input
-                      type="text"
-                      placeholder="correo@cliente.com"
-                      value={cotCorreoManual}
-                      onChange={(e) => setCotCorreoManual(e.target.value)}
-                      className="w-full text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <span className="block text-[10px] font-bold uppercase text-black">DIRECCIÓN DE ENVÍO</span>
-                    <input
-                      type="text"
-                      placeholder="Ciudad / Dirección de entrega"
-                      value={cotDireccionManual}
-                      onChange={(e) => setCotDireccionManual(e.target.value)}
-                      className="w-full text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5"
-                    />
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0 flex flex-col justify-between">
-                  <div>
-                    <span
-                      style={{ backgroundColor: '#2B5A45' }}
-                      className="inline-block text-white text-xs font-bold tracking-widest px-3 py-1 uppercase"
-                    >
-                      COTIZACIÓN
-                    </span>
-                    <p className="text-[11px] text-black mt-1">
-                      Folio: <input type="number" value={cotFolio} onChange={(e) => setCotFolio(e.target.value)} className="w-16 text-right font-bold text-black bg-white" />
-                    </p>
-                  </div>
-                  <div className="mt-2">
-                    <span className="block text-[10px] font-bold uppercase text-black">FECHA DE COTIZACIÓN</span>
-                    <input
-                      type="date"
-                      value={cotFecha}
-                      onChange={(e) => setCotFecha(e.target.value)}
-                      className="text-xs font-semibold text-black bg-white border-b border-gray-300 text-right outline-none"
-                    />
-                  </div>
-                </div>
+                )}
               </div>
+            ) : (
+              <>
+                <div className="no-print bg-white p-4 rounded-xl border border-gray-200 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3">
+                    <div>
+                      <h2 className="font-bold text-black">Configuración de Cotización</h2>
+                      <p className="text-[11px] text-gray-600">
+                        Archivo sugerido: <strong>{suggestedQuoteFileName}.pdf</strong> • Guarda automáticamente en Récord al imprimir o descargar.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={handlePrintCotizacion}
+                        className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3.5 py-2 rounded-lg text-xs font-semibold"
+                      >
+                        <Printer className="w-4 h-4 text-[#2B5A45]" /> Imprimir
+                      </button>
+                      <button
+                        onClick={handleDownloadCotizacionPdf}
+                        style={{ backgroundColor: '#2B5A45' }}
+                        className="flex items-center gap-1.5 text-white px-3.5 py-2 rounded-lg text-xs font-semibold hover:opacity-95"
+                      >
+                        <Download className="w-4 h-4" /> Descargar PDF
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-[11px] border-collapse bg-white text-black">
-                  <thead>
-                    <tr style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[10px]">
-                      <th className="p-2 text-left">SKU</th>
-                      <th className="p-2 text-left">Producto</th>
-                      <th className="p-2 text-center">Foto Ref.</th>
-                      <th className="p-2 text-center">Presentación</th>
-                      <th className="p-2 text-center">Cant.</th>
-                      <th className="p-2 text-center">Uds x Paq</th>
-                      <th className="p-2 text-center">Paq x Caja</th>
-                      <th className="p-2 text-center">Total Uds</th>
-                      <th className="p-2 text-right">Precio Unitario</th>
-                      <th className="p-2 text-right">Precio Paq/Caja</th>
-                      <th className="p-2 text-center">Impresión</th>
-                      <th className="p-2 text-right">Total Importe</th>
-                      <th className="p-2 no-print"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 border-b border-gray-300 bg-white text-black">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-black mb-1">Cliente / Distribuidor Base</label>
+                      <select
+                        value={cotClientId}
+                        onChange={(e) => handleSelectCotClient(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
+                      >
+                        <option value="">-- Cliente Nuevo / Sin Descuento --</option>
+                        {clients.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-black mb-1">Impresión Base (por defecto)</label>
+                      <select
+                        value={cotImpresion}
+                        onChange={(e) => setCotImpresion(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white font-semibold text-black"
+                      >
+                        {MODALIDADES_IMPRESION.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-black mb-1">Ejecutivo que Firma</label>
+                      <select
+                        value={cotEjecutivoId}
+                        onChange={(e) => setCotEjecutivoId(e.target.value)}
+                        className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
+                      >
+                        {ejecutivos.map((ej) => <option key={ej.id} value={ej.id}>{ej.nombre}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-black mb-1">Color / Colección</label>
+                      <div className="flex gap-1">
+                        <select
+                          value={filterColor}
+                          onChange={(e) => setFilterColor(e.target.value)}
+                          className="w-1/2 border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
+                        >
+                          {colorOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <select
+                          value={filterCollection}
+                          onChange={(e) => setFilterCollection(e.target.value)}
+                          className="w-1/2 border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
+                        >
+                          {collectionOptions.map((col) => <option key={col} value={col}>{col}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-black mb-1">Medida / Material</label>
+                      <div className="flex gap-1">
+                        <select
+                          value={filterSize}
+                          onChange={(e) => setFilterSize(e.target.value)}
+                          className="w-1/2 border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
+                        >
+                          {TAMANOS_FILTER.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <select
+                          value={filterMaterial}
+                          onChange={(e) => setFilterMaterial(e.target.value)}
+                          className="w-1/2 border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
+                        >
+                          {MATERIALES_FILTER.map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Controles para mostrar/ocultar Subtotal, Envío, IVA y Total */}
+                  <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-100 text-xs">
+                    <span className="font-bold text-black">Visibilidad en cotización:</span>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={showCotSubtotal} onChange={(e) => setShowCotSubtotal(e.target.checked)} />
+                      Subtotal
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={showCotEnvio} onChange={(e) => setShowCotEnvio(e.target.checked)} />
+                      Envío
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={showCotIva} onChange={(e) => setShowCotIva(e.target.checked)} />
+                      IVA (16%)
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="checkbox" checked={showCotTotal} onChange={(e) => setShowCotTotal(e.target.checked)} />
+                      Total General
+                    </label>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-300 max-w-6xl mx-auto p-4 sm:p-6 space-y-5 text-black">
+                  <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-gray-300 pb-4">
+                    <div className="shrink-0">
+                      <img
+                        src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)}
+                        alt="Logo La Pajarita"
+                        className="h-14 sm:h-16 object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 flex-1 w-full text-xs">
+                      <div>
+                        <span className="block text-[10px] font-bold uppercase text-black">NOMBRE CLIENTE</span>
+                        <input
+                          type="text"
+                          placeholder="NOMBRE O RAZÓN SOCIAL"
+                          value={cotClienteManual}
+                          onChange={(e) => setCotClienteManual(toUpper(e.target.value))}
+                          className="w-full font-bold text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5 uppercase"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold uppercase text-black">NOMBRE DE CONTACTO</span>
+                        <input
+                          type="text"
+                          placeholder="NOMBRE DE CONTACTO"
+                          value={cotContactoManual}
+                          onChange={(e) => setCotContactoManual(toUpper(e.target.value))}
+                          className="w-full text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5 uppercase"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold uppercase text-black">TELÉFONO</span>
+                        <input
+                          type="text"
+                          placeholder="TELÉFONO"
+                          value={cotTelefonoManual}
+                          onChange={(e) => setCotTelefonoManual(toUpper(e.target.value))}
+                          className="w-full text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5 uppercase"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold uppercase text-black">CORREO</span>
+                        <input
+                          type="text"
+                          placeholder="correo@cliente.com"
+                          value={cotCorreoManual}
+                          onChange={(e) => setCotCorreoManual(e.target.value)}
+                          className="w-full text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <span className="block text-[10px] font-bold uppercase text-black">DIRECCIÓN DE ENVÍO</span>
+                        <input
+                          type="text"
+                          placeholder="CIUDAD / DIRECCIÓN DE ENTREGA"
+                          value={cotDireccionManual}
+                          onChange={(e) => setCotDireccionManual(toUpper(e.target.value))}
+                          className="w-full text-black bg-white border-b border-gray-300 focus:border-black outline-none py-0.5 uppercase"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="text-left md:text-right shrink-0 flex flex-col justify-between">
+                      <div>
+                        <span
+                          style={{ backgroundColor: '#2B5A45' }}
+                          className="inline-block text-white text-xs font-bold tracking-widest px-3 py-1 uppercase"
+                        >
+                          COTIZACIÓN
+                        </span>
+                        <p className="text-[11px] text-black mt-1">
+                          Folio: <input type="number" value={cotFolio} onChange={(e) => setCotFolio(e.target.value)} className="w-20 md:text-right font-bold text-black bg-white border-b border-gray-200" />
+                        </p>
+                      </div>
+                      <div className="mt-2">
+                        <span className="block text-[10px] font-bold uppercase text-black">FECHA DE COTIZACIÓN</span>
+                        <input
+                          type="date"
+                          value={cotFecha}
+                          onChange={(e) => setCotFecha(e.target.value)}
+                          className="text-xs font-semibold text-black bg-white border-b border-gray-300 outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tarjetas en celular para cada renglón de cotización */}
+                  <div className="space-y-3 md:hidden">
                     {cotItems.map((row, idx) => {
                       const prod = inventory.find((p) => p.sku === row.sku);
-                      const calc = calcLineCotizacion(prod, row.unidadVenta, Number(row.cantidad) || 0);
-                      const fotoVisible = row.fotoRef || prod?.fotoUrl || '';
+                      const calc = calcLineCotizacion(prod, row.unidadVenta, Number(row.cantidad) || 0, row.impresion);
                       return (
-                        <tr key={idx} className="bg-white">
-                          <td className="p-1.5 font-mono font-bold text-black">
+                        <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2 text-xs">
+                          <div className="flex items-center justify-between gap-2">
                             <select
                               value={row.sku}
                               onChange={(e) => {
-                                const chosenSku = e.target.value;
-                                const matchProd = inventory.find((p) => p.sku === chosenSku);
                                 const up = [...cotItems];
-                                up[idx].sku = chosenSku;
-                                if (!up[idx].fotoRef && matchProd?.fotoUrl) {
-                                  up[idx].fotoRef = matchProd.fotoUrl;
-                                }
+                                up[idx].sku = e.target.value;
                                 setCotItems(up);
                               }}
-                              className="border border-gray-300 rounded p-1 font-mono text-[11px] w-28 bg-white text-black"
+                              className="flex-1 border border-gray-300 rounded p-1.5 font-mono font-bold bg-white"
                             >
-                              <option value="">SKU...</option>
+                              <option value="">Seleccionar SKU...</option>
                               {filteredInventory.map((p) => <option key={p.sku} value={p.sku}>{p.sku}</option>)}
                             </select>
-                          </td>
-                          <td className="p-1.5 text-[10px] leading-tight max-w-[170px] text-black">{prod?.descripcion || '-'}</td>
-                          <td className="p-1.5 text-center">
-                            <div className="flex flex-col items-center gap-1">
-                              {fotoVisible && (
-                                <img
-                                  src={toDirectDriveImg(fotoVisible)}
-                                  alt="Ref SKU"
-                                  className="w-10 h-10 object-cover rounded border border-gray-300"
-                                  referrerPolicy="no-referrer"
-                                />
-                              )}
-                              <label className="no-print cursor-pointer inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 border border-gray-300 rounded hover:bg-gray-100 text-black">
-                                <ImageIcon className="w-2.5 h-2.5" /> {fotoVisible ? 'Cambiar' : 'Foto (Opc.)'}
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={(e) =>
-                                    readImageFileAsDataUrl(e.target.files?.[0], (url) => {
-                                      const up = [...cotItems];
-                                      up[idx].fotoRef = url;
-                                      setCotItems(up);
-                                    })
-                                  }
-                                />
-                              </label>
-                            </div>
-                          </td>
-                          <td className="p-1.5 text-center">
+                            <button onClick={() => setCotItems(cotItems.filter((_, i) => i !== idx))} className="text-red-600 p-1">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-gray-700">{prod?.descripcion || '-'}</p>
+                          <div className="grid grid-cols-3 gap-2">
                             <select
                               value={row.unidadVenta}
                               onChange={(e) => {
@@ -2144,13 +2879,11 @@ export default function App() {
                                 up[idx].unidadVenta = e.target.value;
                                 setCotItems(up);
                               }}
-                              className="border border-gray-300 rounded p-1 text-[10px] bg-white text-black"
+                              className="border border-gray-300 rounded p-1.5 bg-white"
                             >
                               <option value="caja">Caja</option>
                               <option value="paquete">Paquete</option>
                             </select>
-                          </td>
-                          <td className="p-1.5 text-center">
                             <input
                               type="number"
                               min="1"
@@ -2160,96 +2893,254 @@ export default function App() {
                                 up[idx].cantidad = e.target.value;
                                 setCotItems(up);
                               }}
-                              className="border border-gray-300 rounded p-1 w-12 text-center font-semibold bg-white text-black"
+                              className="border border-gray-300 rounded p-1.5 text-center font-semibold bg-white"
                             />
-                          </td>
-                          <td className="p-1.5 text-center text-black">{prod?.uPq || 0}</td>
-                          <td className="p-1.5 text-center text-black">{prod?.pCaja || 0}</td>
-                          <td className="p-1.5 text-center font-medium text-black">{calc.totalUds.toLocaleString('es-MX')}</td>
-                          <td className="p-1.5 text-right text-black">{formatCurrency(calc.precioUnitarioPieza, 4)}</td>
-                          <td className="p-1.5 text-right font-medium text-black">{formatCurrency(calc.precioNormalUnidad)}</td>
-                          <td className="p-1.5 text-center text-[10px] text-black">{modalidadShort}</td>
-                          <td className="p-1.5 text-right font-bold text-black">{formatCurrency(calc.importeNormal)}</td>
-                          <td className="p-1.5 text-center no-print">
-                            <button onClick={() => setCotItems(cotItems.filter((_, i) => i !== idx))} className="text-red-600">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
+                            <select
+                              value={row.impresion || cotImpresion}
+                              onChange={(e) => {
+                                const up = [...cotItems];
+                                up[idx].impresion = e.target.value;
+                                setCotItems(up);
+                              }}
+                              className="border border-gray-300 rounded p-1.5 bg-white text-[11px]"
+                            >
+                              {MODALIDADES_IMPRESION.map((m) => (
+                                <option key={m.id} value={m.id}>{m.short}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex justify-between items-center pt-1 border-t border-gray-100 text-[11px]">
+                            <span>U/Pq: <strong>{prod?.uPq || 0}</strong> • P/Caja: <strong>{prod?.pCaja || 0}</strong></span>
+                            <span className="font-bold text-sm">{formatCurrency(calc.importeNormal)}</span>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
 
-              <button
-                onClick={() => setCotItems([...cotItems, { sku: '', unidadVenta: 'caja', cantidad: 1, fotoRef: '' }])}
-                className="no-print flex items-center gap-1 text-xs text-black font-bold hover:underline"
-              >
-                <Plus className="w-3.5 h-3.5" /> Agregar renglón
-              </button>
+                  {/* Tabla completa en escritorio */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-[11px] border-collapse bg-white text-black">
+                      <thead>
+                        <tr style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[10px]">
+                          <th className="p-2 text-left">SKU</th>
+                          <th className="p-2 text-left">Producto</th>
+                          <th className="p-2 text-center">Foto Ref.</th>
+                          <th className="p-2 text-center">Presentación</th>
+                          <th className="p-2 text-center">Cant.</th>
+                          <th className="p-2 text-center">Uds x Paq</th>
+                          <th className="p-2 text-center">Paq x Caja</th>
+                          <th className="p-2 text-center">Total Uds</th>
+                          <th className="p-2 text-right">Precio Unitario</th>
+                          <th className="p-2 text-right">Precio Paq/Caja</th>
+                          <th className="p-2 text-center">Impresión SKU</th>
+                          <th className="p-2 text-right">Total Importe</th>
+                          <th className="p-2 no-print"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 border-b border-gray-300 bg-white text-black">
+                        {cotItems.map((row, idx) => {
+                          const prod = inventory.find((p) => p.sku === row.sku);
+                          const calc = calcLineCotizacion(prod, row.unidadVenta, Number(row.cantidad) || 0, row.impresion);
+                          const fotoVisible = row.fotoRef || prod?.fotoUrl || '';
+                          return (
+                            <tr key={idx} className="bg-white">
+                              <td className="p-1.5 font-mono font-bold text-black">
+                                <select
+                                  value={row.sku}
+                                  onChange={(e) => {
+                                    const chosenSku = e.target.value;
+                                    const matchProd = inventory.find((p) => p.sku === chosenSku);
+                                    const up = [...cotItems];
+                                    up[idx].sku = chosenSku;
+                                    if (!up[idx].fotoRef && matchProd?.fotoUrl) {
+                                      up[idx].fotoRef = matchProd.fotoUrl;
+                                    }
+                                    setCotItems(up);
+                                  }}
+                                  className="border border-gray-300 rounded p-1 font-mono text-[11px] w-28 bg-white text-black"
+                                >
+                                  <option value="">SKU...</option>
+                                  {filteredInventory.map((p) => <option key={p.sku} value={p.sku}>{p.sku}</option>)}
+                                </select>
+                              </td>
+                              <td className="p-1.5 text-[10px] leading-tight max-w-[160px] text-black">{prod?.descripcion || '-'}</td>
+                              <td className="p-1.5 text-center">
+                                <div className="flex flex-col items-center gap-1">
+                                  {fotoVisible && (
+                                    <img
+                                      src={toDirectDriveImg(fotoVisible)}
+                                      alt="Ref SKU"
+                                      className="w-10 h-10 object-cover rounded border border-gray-300"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  )}
+                                  <label className="no-print cursor-pointer inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 border border-gray-300 rounded hover:bg-gray-100 text-black">
+                                    <ImageIcon className="w-2.5 h-2.5" /> {fotoVisible ? 'Cambiar' : 'Foto'}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) =>
+                                        readImageFileAsDataUrl(e.target.files?.[0], (url) => {
+                                          const up = [...cotItems];
+                                          up[idx].fotoRef = url;
+                                          setCotItems(up);
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                </div>
+                              </td>
+                              <td className="p-1.5 text-center">
+                                <select
+                                  value={row.unidadVenta}
+                                  onChange={(e) => {
+                                    const up = [...cotItems];
+                                    up[idx].unidadVenta = e.target.value;
+                                    setCotItems(up);
+                                  }}
+                                  className="border border-gray-300 rounded p-1 text-[10px] bg-white text-black"
+                                >
+                                  <option value="caja">Caja</option>
+                                  <option value="paquete">Paquete</option>
+                                </select>
+                              </td>
+                              <td className="p-1.5 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={row.cantidad}
+                                  onChange={(e) => {
+                                    const up = [...cotItems];
+                                    up[idx].cantidad = e.target.value;
+                                    setCotItems(up);
+                                  }}
+                                  className="border border-gray-300 rounded p-1 w-12 text-center font-semibold bg-white text-black"
+                                />
+                              </td>
+                              <td className="p-1.5 text-center text-black">{prod?.uPq || 0}</td>
+                              <td className="p-1.5 text-center text-black">{prod?.pCaja || 0}</td>
+                              <td className="p-1.5 text-center font-medium text-black">{calc.totalUds.toLocaleString('es-MX')}</td>
+                              <td className="p-1.5 text-right text-black">{formatCurrency(calc.precioUnitarioPieza, 4)}</td>
+                              <td className="p-1.5 text-right font-medium text-black">{formatCurrency(calc.precioNormalUnidad)}</td>
+                              <td className="p-1.5 text-center">
+                                <select
+                                  value={row.impresion || cotImpresion}
+                                  onChange={(e) => {
+                                    const up = [...cotItems];
+                                    up[idx].impresion = e.target.value;
+                                    setCotItems(up);
+                                  }}
+                                  className="border border-gray-300 rounded p-1 text-[10px] bg-white text-black font-medium"
+                                >
+                                  {MODALIDADES_IMPRESION.map((m) => (
+                                    <option key={m.id} value={m.id}>{m.short}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="p-1.5 text-right font-bold text-black">{formatCurrency(calc.importeNormal)}</td>
+                              <td className="p-1.5 text-center no-print">
+                                <button onClick={() => setCotItems(cotItems.filter((_, i) => i !== idx))} className="text-red-600">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-              <div className="flex flex-col md:flex-row justify-between items-start gap-6 pt-2">
-                <div className="flex-1 space-y-4">
-                  <div>
-                    <span className="block text-[10px] font-bold uppercase text-black mb-1">NOTAS:</span>
-                    <textarea
-                      rows="10"
-                      value={cotNotas}
-                      onChange={(e) => setCotNotas(e.target.value)}
-                      className="no-print w-full text-[10px] leading-relaxed text-black border border-gray-300 rounded p-2 bg-white"
-                    />
-                    <div className="hidden print:block text-[10px] leading-relaxed text-black whitespace-pre-line">
-                      {cotNotas}
+                  <button
+                    onClick={() => setCotItems([...cotItems, { sku: '', unidadVenta: 'caja', cantidad: 1, impresion: null, fotoRef: '' }])}
+                    className="no-print flex items-center gap-1 text-xs text-black font-bold hover:underline"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Agregar renglón
+                  </button>
+
+                  <div className="flex flex-col md:flex-row justify-between items-start gap-6 pt-2">
+                    <div className="flex-1 w-full space-y-4">
+                      <div>
+                        <span className="block text-[10px] font-bold uppercase text-black mb-1">NOTAS:</span>
+                        <textarea
+                          rows="8"
+                          value={cotNotas}
+                          onChange={(e) => setCotNotas(e.target.value)}
+                          className="no-print w-full text-[10px] leading-relaxed text-black border border-gray-300 rounded p-2 bg-white"
+                        />
+                        <div className="hidden print:block text-[10px] leading-relaxed text-black whitespace-pre-line">
+                          {cotNotas}
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        {ejecutivoActual?.firmaUrl && (
+                          <img
+                            src={toDirectDriveImg(ejecutivoActual.firmaUrl)}
+                            alt="Firma autorizada"
+                            className="h-20 object-contain"
+                            referrerPolicy="no-referrer"
+                          />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="w-full md:w-72 shrink-0 self-end">
+                      <table className="w-full text-xs border border-gray-300 bg-white text-black">
+                        <tbody className="divide-y divide-gray-300">
+                          {showCotSubtotal && (
+                            <tr className="bg-white">
+                              <td className="p-2 font-bold text-black">SUBTOTAL</td>
+                              <td className="p-2 text-right font-semibold text-black">{formatCurrency(cotSubtotalNeto)}</td>
+                            </tr>
+                          )}
+                          {showCotEnvio && (
+                            <tr className="bg-white">
+                              <td className="p-2 font-bold text-black">ENVÍO</td>
+                              <td className="p-2 text-right font-semibold text-black">
+                                <span className="no-print">
+                                  ${' '}
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={cotEnvio}
+                                    onChange={(e) => setCotEnvio(e.target.value)}
+                                    className="w-24 border border-gray-300 rounded px-1.5 py-0.5 text-right bg-white text-black"
+                                  />
+                                </span>
+                                <span className="hidden print:inline">{formatCurrency(cotEnvioNum)}</span>
+                              </td>
+                            </tr>
+                          )}
+                          {showCotIva && (
+                            <tr className="bg-white">
+                              <td className="p-2 font-bold text-black">IVA (16%)</td>
+                              <td className="p-2 text-right font-semibold text-black">{formatCurrency(cotIva)}</td>
+                            </tr>
+                          )}
+                          {showCotTotal && (
+                            <tr style={{ backgroundColor: '#2B5A45' }} className="text-white">
+                              <td className="p-2.5 font-bold">TOTAL GENERAL</td>
+                              <td className="p-2.5 text-right font-bold text-sm">{formatCurrency(cotTotalGeneral)}</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-
-                  <div className="pt-2">
-                    {ejecutivoActual?.firmaUrl && (
-                      <img
-                        src={toDirectDriveImg(ejecutivoActual.firmaUrl)}
-                        alt="Firma autorizada"
-                        className="h-20 object-contain"
-                        referrerPolicy="no-referrer"
-                      />
-                    )}
-                  </div>
                 </div>
-
-                <div className="w-full md:w-64 shrink-0 self-end">
-                  <table className="w-full text-xs border border-gray-300 bg-white text-black">
-                    <tbody className="divide-y divide-gray-300">
-                      <tr className="bg-white">
-                        <td className="p-2 font-bold text-black">SUBTOTAL</td>
-                        <td className="p-2 text-right font-semibold text-black">{formatCurrency(cotSubtotalNormal)}</td>
-                      </tr>
-                      {cotDescuentoMonto > 0 && (
-                        <tr className="bg-white">
-                          <td className="p-2 font-bold text-black">DESCUENTO</td>
-                          <td className="p-2 text-right font-semibold text-black">- {formatCurrency(cotDescuentoMonto)}</td>
-                        </tr>
-                      )}
-                      <tr className="bg-white">
-                        <td className="p-2 font-bold text-black">IVA (16%)</td>
-                        <td className="p-2 text-right font-semibold text-black">{formatCurrency(cotIva)}</td>
-                      </tr>
-                      <tr style={{ backgroundColor: '#2B5A45' }} className="text-white">
-                        <td className="p-2.5 font-bold">TOTAL GENERAL</td>
-                        <td className="p-2.5 text-right font-bold text-sm">{formatCurrency(cotTotalGeneral)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         )}
 
-        {/* TAB 5: CLIENTES / HISTORIAL */}
+        {/* TAB 5: CLIENTES / HISTORIAL + DIRECCIÓN ENVÍO Y FACTURACIÓN EN MAYÚSCULAS */}
         {isAdmin && activeTab === 'clientes' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
-              <h2 className="font-bold text-lg text-black">Clientes, Distribuidores e Historial de Productos</h2>
+            <div className="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-gray-200">
+              <h2 className="font-bold text-base sm:text-lg text-black">Clientes, Distribuidores e Historial de Productos</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => exportToCSV('clientes_distribuidores.csv', clients)}
@@ -2258,7 +3149,7 @@ export default function App() {
                   <Download className="w-4 h-4" /> Exportar CSV
                 </button>
                 <button
-                  onClick={() => setShowClientModal(true)}
+                  onClick={openNewClientModal}
                   style={{ backgroundColor: '#2B5A45' }}
                   className="flex items-center gap-2 text-white px-3 py-2 rounded-lg text-xs"
                 >
@@ -2268,40 +3159,55 @@ export default function App() {
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-              <table className="w-full text-sm text-left">
+              <table className="w-full text-xs sm:text-sm text-left">
                 <thead style={{ backgroundColor: '#2B5A45' }} className="text-white text-xs uppercase">
                   <tr>
                     <th className="px-4 py-3">Razón Social</th>
-                    <th className="px-4 py-3">Tipo</th>
-                    <th className="px-4 py-3 text-center">% Descuento</th>
-                    <th className="px-4 py-3">Contacto</th>
-                    <th className="px-4 py-3">Dirección</th>
-                    <th className="px-4 py-3 text-center">Historial</th>
+                    <th className="px-4 py-3">Correo / Contacto</th>
+                    <th className="px-4 py-3 text-center">% Desc</th>
+                    <th className="px-4 py-3">Dirección Envío</th>
+                    <th className="px-4 py-3">Dirección Facturación</th>
+                    <th className="px-4 py-3 text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white text-black">
-                  {clients.map((c) => (
-                    <tr key={c.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-semibold">{c.nombre}</td>
-                      <td className="px-4 py-3">{c.tipo}</td>
-                      <td className="px-4 py-3 text-center font-bold">{c.descuento}%</td>
-                      <td className="px-4 py-3">{c.contacto}</td>
-                      <td className="px-4 py-3 text-xs">{c.direccion}</td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => setSelectedHistoryClient(c.nombre)}
-                          className="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-[#2B5A45] text-xs font-semibold border border-emerald-200"
-                        >
-                          Ver SKUs
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {clients.map((c) => {
+                    const envioTxt = formatStructuredAddress(c.direccionEnvio) || toUpper(c.direccion || '');
+                    const factTxt = formatStructuredAddress(c.direccionFacturacion) || envioTxt;
+                    return (
+                      <tr key={c.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 font-semibold uppercase">{c.nombre}</td>
+                        <td className="px-4 py-3 text-xs">
+                          <div className="font-semibold">{c.correo || '-'}</div>
+                          <div className="text-gray-600 uppercase">{c.contacto}</div>
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold">{c.descuento}%</td>
+                        <td className="px-4 py-3 text-xs uppercase max-w-[220px]">{envioTxt}</td>
+                        <td className="px-4 py-3 text-xs uppercase max-w-[220px]">{factTxt}</td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => openEditClientModal(c)}
+                              className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-black text-xs font-semibold inline-flex items-center gap-1"
+                            >
+                              <Edit3 className="w-3 h-3" /> Editar
+                            </button>
+                            <button
+                              onClick={() => setSelectedHistoryClient(c.nombre)}
+                              className="px-2 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-[#2B5A45] text-xs font-semibold border border-emerald-200"
+                            >
+                              SKUs
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 space-y-4">
               <div className="flex flex-wrap justify-between items-center gap-3 border-b border-gray-200 pb-3">
                 <div>
                   <h3 className="font-bold text-base text-black flex items-center gap-2">
@@ -2408,28 +3314,36 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 7: NUEVA ORDEN */}
+        {/* TAB 7: SOLICITUD DE PEDIDO (SIN STOCK, CON U/PQ, P/CAJA, CAJAS, OPCIÓN DE OCULTAR PRECIOS Y NOTAS) */}
         {isAdmin && activeTab === 'pedido' && (
-          <div className="bg-white p-6 rounded-xl border border-gray-200 max-w-6xl mx-auto space-y-6 text-black">
+          <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200 max-w-6xl mx-auto space-y-6 text-black">
             <div className="flex flex-wrap justify-between items-center border-b border-gray-300 pb-4 gap-4">
               <div className="flex items-center gap-3">
                 <img
                   src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)}
                   alt="La Pajarita"
-                  className="h-12 object-contain"
+                  className="h-11 sm:h-12 object-contain"
                   referrerPolicy="no-referrer"
                 />
                 <div>
-                  <h2 className="text-xl font-bold text-black">Solicitud de Pedido a Bodega</h2>
-                  <p className="text-xs text-gray-600">Descuenta automáticamente existencias y registra la venta en el dashboard</p>
+                  <h2 className="text-lg sm:text-xl font-bold text-black">Solicitud de Pedido</h2>
+                  <p className="text-xs text-gray-600">SKU, descripción, U/PQ, P/CAJA y cajas • Opción de ocultar precios</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                <button
+                  type="button"
+                  onClick={() => setOrdShowPrices(!ordShowPrices)}
+                  className="no-print flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-semibold"
+                >
+                  {ordShowPrices ? <EyeOff className="w-4 h-4 text-[#2B5A45]" /> : <Eye className="w-4 h-4 text-[#2B5A45]" />}
+                  {ordShowPrices ? 'Ocultar Precios' : 'Mostrar Precios'}
+                </button>
                 <button
                   onClick={() => window.print()}
                   className="no-print flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3.5 py-2 rounded-lg text-xs font-semibold"
                 >
-                  <Printer className="w-4 h-4" /> Descargar / Imprimir PDF
+                  <Printer className="w-4 h-4" /> Imprimir / PDF
                 </button>
                 <div className="text-right">
                   <span className="text-xs text-gray-600 block">Folio Pedido</span>
@@ -2437,7 +3351,7 @@ export default function App() {
                     type="number"
                     value={ordFolio}
                     onChange={(e) => setOrdFolio(e.target.value)}
-                    className="w-24 text-right text-xl font-bold text-black bg-white border-b border-gray-300"
+                    className="w-24 text-right text-lg sm:text-xl font-bold text-black bg-white border-b border-gray-300"
                   />
                   <div className="mt-1">
                     <input
@@ -2449,23 +3363,6 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="no-print flex flex-wrap items-center gap-2 bg-white p-3 rounded-lg border border-gray-200 text-xs">
-              <span className="font-semibold text-black">Filtrar SKUs:</span>
-              <input
-                type="text"
-                placeholder="Buscar SKU o palabra..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="border border-gray-300 rounded px-2 py-1 bg-white text-black"
-              />
-              <select value={filterSize} onChange={(e) => setFilterSize(e.target.value)} className="border border-gray-300 rounded px-2 py-1 bg-white text-black">
-                {TAMANOS_FILTER.map((t) => <option key={t} value={t}>Tamaño: {t}</option>)}
-              </select>
-              <select value={filterMaterial} onChange={(e) => setFilterMaterial(e.target.value)} className="border border-gray-300 rounded px-2 py-1 bg-white text-black">
-                {MATERIALES_FILTER.map((m) => <option key={m} value={m}>Material: {m}</option>)}
-              </select>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-4 rounded-lg border border-gray-200">
@@ -2505,17 +3402,74 @@ export default function App() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Tarjetas en celular */}
+            <div className="space-y-3 md:hidden">
+              {ordItems.map((row, idx) => {
+                const prod = inventory.find((p) => p.sku === row.sku);
+                const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedOrdClient?.descuento || 0);
+                const precioFinal = prod ? (Number(prod.costoCaja) || 0) * (1 - descPct / 100) : 0;
+                return (
+                  <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <select
+                        value={row.sku}
+                        onChange={(e) => {
+                          const up = [...ordItems];
+                          up[idx].sku = e.target.value;
+                          setOrdItems(up);
+                        }}
+                        className="flex-1 border border-gray-300 rounded p-1.5 font-mono font-bold bg-white"
+                      >
+                        <option value="">SKU...</option>
+                        {filteredInventory.map((p) => <option key={p.sku} value={p.sku}>{p.sku}</option>)}
+                      </select>
+                      <button onClick={() => setOrdItems(ordItems.filter((_, i) => i !== idx))} className="text-red-600 p-1">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-gray-700">{prod?.descripcion || '-'}</p>
+                    <div className="grid grid-cols-3 gap-2 items-center">
+                      <div>U/PQ: <strong>{prod?.uPq || 0}</strong></div>
+                      <div>P/CAJA: <strong>{prod?.pCaja || 0}</strong></div>
+                      <div className="flex items-center gap-1">
+                        <span>Cajas:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={row.cajas}
+                          onChange={(e) => {
+                            const up = [...ordItems];
+                            up[idx].cajas = e.target.value;
+                            setOrdItems(up);
+                          }}
+                          className="w-16 border border-gray-300 rounded p-1 text-center font-bold bg-white"
+                        />
+                      </div>
+                    </div>
+                    {ordShowPrices && (
+                      <div className="flex justify-between pt-1 border-t border-gray-100">
+                        <span>Desc: {descPct}% • Unit: {formatCurrency(precioFinal)}</span>
+                        <strong>{formatCurrency(precioFinal * (Number(row.cajas) || 0))}</strong>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Tabla en escritorio (sin columna Stock) */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm bg-white text-black">
                 <thead style={{ backgroundColor: '#2B5A45' }} className="text-white text-xs uppercase">
                   <tr>
                     <th className="p-2 text-left">SKU</th>
-                    <th className="p-2 text-left">Producto</th>
-                    <th className="p-2 text-center">Stock</th>
+                    <th className="p-2 text-left">Descripción</th>
+                    <th className="p-2 text-center">U/PQ</th>
+                    <th className="p-2 text-center">P/CAJA</th>
                     <th className="p-2 text-center">Cajas</th>
-                    <th className="p-2 text-center">% Desc</th>
-                    <th className="p-2 text-right">Precio Final</th>
-                    <th className="p-2 text-right">Subtotal</th>
+                    {ordShowPrices && <th className="p-2 text-center">% Desc</th>}
+                    {ordShowPrices && <th className="p-2 text-right">Precio Final</th>}
+                    {ordShowPrices && <th className="p-2 text-right">Subtotal</th>}
                     <th className="p-2 no-print"></th>
                   </tr>
                 </thead>
@@ -2524,7 +3478,6 @@ export default function App() {
                     const prod = inventory.find((p) => p.sku === row.sku);
                     const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedOrdClient?.descuento || 0);
                     const precioFinal = prod ? (Number(prod.costoCaja) || 0) * (1 - descPct / 100) : 0;
-                    const excede = prod && Number(row.cajas) > Number(prod.stock);
                     return (
                       <tr key={idx}>
                         <td className="p-2">
@@ -2542,13 +3495,8 @@ export default function App() {
                           </select>
                         </td>
                         <td className="p-2 text-xs text-black">{prod?.descripcion || '-'}</td>
-                        <td className="p-2 text-center font-semibold">
-                          {prod ? (
-                            <span className={excede ? 'text-red-600' : 'text-black'}>
-                              {prod.stock} {excede && <AlertTriangle className="w-3.5 h-3.5 inline" />}
-                            </span>
-                          ) : '-'}
-                        </td>
+                        <td className="p-2 text-center font-medium">{prod?.uPq || 0}</td>
+                        <td className="p-2 text-center font-medium">{prod?.pCaja || 0}</td>
                         <td className="p-2 text-center">
                           <input
                             type="number"
@@ -2559,25 +3507,31 @@ export default function App() {
                               up[idx].cajas = e.target.value;
                               setOrdItems(up);
                             }}
-                            className="border border-gray-300 rounded p-1 w-20 text-center bg-white text-black"
+                            className="border border-gray-300 rounded p-1 w-20 text-center font-semibold bg-white text-black"
                           />
                         </td>
-                        <td className="p-2 text-center">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={descPct}
-                            onChange={(e) => {
-                              const up = [...ordItems];
-                              up[idx].customDesc = e.target.value;
-                              setOrdItems(up);
-                            }}
-                            className="border border-gray-300 rounded p-1 w-16 text-center bg-white text-black"
-                          />
-                        </td>
-                        <td className="p-2 text-right text-black">{formatCurrency(precioFinal)}</td>
-                        <td className="p-2 text-right font-bold text-black">{formatCurrency(precioFinal * (Number(row.cajas) || 0))}</td>
+                        {ordShowPrices && (
+                          <td className="p-2 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={descPct}
+                              onChange={(e) => {
+                                const up = [...ordItems];
+                                up[idx].customDesc = e.target.value;
+                                setOrdItems(up);
+                              }}
+                              className="border border-gray-300 rounded p-1 w-16 text-center bg-white text-black"
+                            />
+                          </td>
+                        )}
+                        {ordShowPrices && <td className="p-2 text-right text-black">{formatCurrency(precioFinal)}</td>}
+                        {ordShowPrices && (
+                          <td className="p-2 text-right font-bold text-black">
+                            {formatCurrency(precioFinal * (Number(row.cajas) || 0))}
+                          </td>
+                        )}
                         <td className="p-2 text-center no-print">
                           <button onClick={() => setOrdItems(ordItems.filter((_, i) => i !== idx))} className="text-red-600">
                             <Trash2 className="w-4 h-4" />
@@ -2597,6 +3551,18 @@ export default function App() {
               <Plus className="w-4 h-4" /> Agregar SKU al pedido
             </button>
 
+            {/* Apartado de Notas */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold uppercase text-black">Notas de la Solicitud de Pedido</label>
+              <textarea
+                rows="3"
+                placeholder="Escribe aquí notas especiales de entrega, maniobras, horario de recepción, etc..."
+                value={ordNotas}
+                onChange={(e) => setOrdNotas(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg p-2.5 text-xs bg-white text-black"
+              />
+            </div>
+
             <div className="flex flex-col md:flex-row justify-between items-end gap-6 pt-4 border-t border-gray-300">
               <button
                 onClick={handleConfirmOrder}
@@ -2607,10 +3573,12 @@ export default function App() {
               </button>
 
               <div className="w-full md:w-80 bg-white p-4 rounded-lg border border-gray-300 space-y-2 text-black ml-auto">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal Productos:</span>
-                  <span className="font-medium">{formatCurrency(ordSubtotal)}</span>
-                </div>
+                {ordShowPrices && (
+                  <div className="flex justify-between text-sm">
+                    <span>Subtotal Productos:</span>
+                    <span className="font-medium">{formatCurrency(ordSubtotal)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center text-sm">
                   <span>Costo de Envío:</span>
                   <input
@@ -2621,20 +3589,24 @@ export default function App() {
                     className="border border-gray-300 rounded px-2 py-1 w-28 text-right bg-white text-black"
                   />
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>IVA (16%):</span>
-                  <span className="font-medium">{formatCurrency(ordIva)}</span>
-                </div>
-                <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2 text-black">
-                  <span>Total Pedido:</span>
-                  <span>{formatCurrency(ordTotal)}</span>
-                </div>
+                {ordShowPrices && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span>IVA (16%):</span>
+                      <span className="font-medium">{formatCurrency(ordIva)}</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2 text-black">
+                      <span>Total Pedido:</span>
+                      <span>{formatCurrency(ordTotal)}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 8: RÉCORD DE PEDIDOS */}
+        {/* TAB 8: RÉCORD DE PEDIDOS + BOTÓN AGREGAR PEDIDO PASADO */}
         {isAdmin && activeTab === 'record' && (
           <div className="space-y-4">
             <div className="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-gray-200">
@@ -2728,7 +3700,7 @@ export default function App() {
 
                   {ord.comentarios && (
                     <p className="mt-2 text-xs bg-gray-50 border border-gray-200 rounded p-2 text-gray-800">
-                      <strong>Comentario:</strong> {ord.comentarios}
+                      <strong>Comentario / Nota:</strong> {ord.comentarios}
                     </p>
                   )}
 
@@ -3034,7 +4006,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Modales exclusivos de Administrador */}
+      {/* Modal Nuevo SKU */}
       {isAdmin && showProdModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSaveProduct} className="bg-white rounded-xl p-6 max-w-md w-full space-y-3 text-black">
@@ -3095,25 +4067,81 @@ export default function App() {
         </div>
       )}
 
+      {/* Modal Crear / Editar Cliente con Direcciones de Envío y Facturación en MAYÚSCULAS */}
       {isAdmin && showClientModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleSaveClient} className="bg-white rounded-xl p-6 max-w-md w-full space-y-3 text-black">
-            <h3 className="font-bold text-lg">Nuevo Cliente o Distribuidor</h3>
-            <input required placeholder="Razón Social o Nombre" value={newClient.nombre} onChange={(e) => setNewClient({ ...newClient, nombre: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
-            <div className="grid grid-cols-2 gap-3">
-              <select value={newClient.tipo} onChange={(e) => setNewClient({ ...newClient, tipo: e.target.value })} className="border border-gray-300 rounded p-2 text-sm bg-white">
-                <option value="Distribuidor">Distribuidor</option>
-                <option value="Cliente Directo">Cliente Directo</option>
-              </select>
-              <input type="number" placeholder="% Descuento" value={newClient.descuento} onChange={(e) => setNewClient({ ...newClient, descuento: e.target.value })} className="border border-gray-300 rounded p-2 text-sm bg-white" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <form onSubmit={handleSaveClient} className="bg-white rounded-xl p-6 max-w-2xl w-full space-y-3 text-black my-8">
+            <h3 className="font-bold text-lg">{editingClientId ? 'Editar Cliente o Distribuidor' : 'Nuevo Cliente o Distribuidor'}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="sm:col-span-2">
+                <label className="block font-bold mb-1">RAZÓN SOCIAL O NOMBRE *</label>
+                <input
+                  required
+                  placeholder="RAZÓN SOCIAL O NOMBRE"
+                  value={newClient.nombre}
+                  onChange={(e) => setNewClient({ ...newClient, nombre: toUpper(e.target.value) })}
+                  className="w-full border border-gray-300 rounded p-2 bg-white uppercase"
+                />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">% DESCUENTO</label>
+                <input
+                  type="number"
+                  placeholder="% DESCUENTO"
+                  value={newClient.descuento}
+                  onChange={(e) => setNewClient({ ...newClient, descuento: e.target.value })}
+                  className="w-full border border-gray-300 rounded p-2 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">TIPO</label>
+                <select
+                  value={newClient.tipo}
+                  onChange={(e) => setNewClient({ ...newClient, tipo: e.target.value })}
+                  className="w-full border border-gray-300 rounded p-2 bg-white"
+                >
+                  <option value="Distribuidor">Distribuidor</option>
+                  <option value="Cliente Directo">Cliente Directo</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-bold mb-1">CORREO DE CONTACTO</label>
+                <input
+                  type="email"
+                  placeholder="correo@empresa.com"
+                  value={newClient.correo}
+                  onChange={(e) => setNewClient({ ...newClient, correo: e.target.value })}
+                  className="w-full border border-gray-300 rounded p-2 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block font-bold mb-1">CONTACTO / TELÉFONO</label>
+                <input
+                  placeholder="CONTACTO / TEL."
+                  value={newClient.contacto}
+                  onChange={(e) => setNewClient({ ...newClient, contacto: toUpper(e.target.value) })}
+                  className="w-full border border-gray-300 rounded p-2 bg-white uppercase"
+                />
+              </div>
             </div>
-            <input placeholder="Contacto" value={newClient.contacto} onChange={(e) => setNewClient({ ...newClient, contacto: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
-            <input placeholder="Correo" value={newClient.correo} onChange={(e) => setNewClient({ ...newClient, correo: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
-            <input placeholder="Teléfono" value={newClient.telefono} onChange={(e) => setNewClient({ ...newClient, telefono: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
-            <input placeholder="Dirección de Entrega" value={newClient.direccion} onChange={(e) => setNewClient({ ...newClient, direccion: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+
+            {renderAddressFields('direccionEnvio', 'DIRECCIÓN DE ENVÍO')}
+            {renderAddressFields('direccionFacturacion', 'DIRECCIÓN DE FACTURACIÓN')}
+
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowClientModal(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancelar</button>
-              <button type="submit" style={{ backgroundColor: '#2B5A45' }} className="px-4 py-2 text-sm text-white rounded-lg font-medium">Guardar</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowClientModal(false);
+                  setEditingClientId(null);
+                }}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button type="submit" style={{ backgroundColor: '#2B5A45' }} className="px-4 py-2 text-sm text-white rounded-lg font-medium">
+                Guardar
+              </button>
             </div>
           </form>
         </div>
