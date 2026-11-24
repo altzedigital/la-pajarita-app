@@ -253,6 +253,21 @@ export default function App() {
   const [editPagado, setEditPagado] = useState('No');
   const [editNumComplemento, setEditNumComplemento] = useState('');
 
+  // Modal para agregar pedidos pasados (anteriores al 188, sin tocar inventario)
+  const [showPastOrderModal, setShowPastOrderModal] = useState(false);
+  const [pastFolio, setPastFolio] = useState(187);
+  const [pastFecha, setPastFecha] = useState(todayStr);
+  const [pastClientId, setPastClientId] = useState('');
+  const [pastRecoge, setPastRecoge] = useState('NO');
+  const [pastEnvio, setPastEnvio] = useState(0);
+  const [pastEjecutivo, setPastEjecutivo] = useState('Ileana Fernández');
+  const [pastItems, setPastItems] = useState([{ sku: '', cajas: 1, customDesc: null }]);
+  const [pastComentarios, setPastComentarios] = useState('');
+  const [pastFacturado, setPastFacturado] = useState('No');
+  const [pastNumFactura, setPastNumFactura] = useState('');
+  const [pastPagado, setPastPagado] = useState('No');
+  const [pastNumComplemento, setPastNumComplemento] = useState('');
+
   // Modales Admin
   const [newProd, setNewProd] = useState({
     sku: '', descripcion: '', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0,
@@ -266,7 +281,7 @@ export default function App() {
   const [newEjec, setNewEjec] = useState({ nombre: '', firmaUrl: '' });
   const [showEjecModal, setShowEjecModal] = useState(false);
 
-  // Estado Cotizador (incluye foto de referencia opcional por partida)
+  // Estado Cotizador
   const [cotFolio, setCotFolio] = useState(1001);
   const [cotFecha, setCotFecha] = useState(todayStr);
   const [cotClientId, setCotClientId] = useState('');
@@ -338,10 +353,18 @@ export default function App() {
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         list.sort((a, b) => (b.folio || 0) - (a.folio || 0));
         setOrders(list);
-        const folios = list.map((o) => Number(o.folio) || 0).filter((n) => n > 0);
-        const nextF = folios.length > 0 ? Math.max(...folios) + 1 : 188;
+
+        const activeFolios = list
+          .filter((o) => !o.esHistorico)
+          .map((o) => Number(o.folio) || 0)
+          .filter((n) => n > 0);
+        const nextF = activeFolios.length > 0 ? Math.max(...activeFolios) + 1 : 188;
         setNextAvailableFolio(nextF);
         setOrdFolio(nextF);
+
+        const allFolios = list.map((o) => Number(o.folio) || 0).filter((n) => n > 0);
+        const minFolio = allFolios.length > 0 ? Math.min(...allFolios) : 188;
+        setPastFolio(Math.max(1, minFolio - 1));
       });
     }
     return () => {
@@ -582,20 +605,20 @@ export default function App() {
     if (!isAdmin) return;
     const deletedFolio = Number(order.folio) || 0;
     const otherFolios = orders
-      .filter((o) => o.id !== order.id)
+      .filter((o) => o.id !== order.id && !o.esHistorico)
       .map((o) => Number(o.folio) || 0);
     const maxOtherFolio = otherFolios.length > 0 ? Math.max(...otherFolios) : 187;
-    const isLatestOrder = deletedFolio > 0 && deletedFolio > maxOtherFolio;
+    const isLatestOrder = !order.esHistorico && deletedFolio > 0 && deletedFolio > maxOtherFolio;
 
     const mensaje = isLatestOrder
       ? `¿Eliminar el Pedido #${deletedFolio} (último creado)? Se regresará el stock y el siguiente pedido tomará el folio #${deletedFolio}.`
-      : `¿Eliminar el Pedido #${deletedFolio}? Ya existen pedidos posteriores, por lo que se regresará el stock y el consecutivo seguirá normal.`;
+      : `¿Eliminar el Pedido #${deletedFolio}? Se regresará el stock (si aplicaba) y el consecutivo seguirá normal.`;
 
     if (!window.confirm(mensaje)) return;
 
     try {
       const batch = writeBatch(db);
-      if (Array.isArray(order.partidas)) {
+      if (!order.esHistorico && Array.isArray(order.partidas)) {
         order.partidas.forEach((line) => {
           const cajasARegresar = Number(line.cajas) || 0;
           if (cajasARegresar > 0) {
@@ -614,7 +637,7 @@ export default function App() {
       const nextF = isLatestOrder && deletedFolio > 0 ? deletedFolio : maxOtherFolio + 1;
       setNextAvailableFolio(nextF);
       setOrdFolio(nextF);
-      alert(`Pedido #${deletedFolio} eliminado y stock devuelto al inventario.`);
+      alert(`Pedido #${deletedFolio} eliminado.`);
     } catch (err) {
       alert('Error al eliminar el pedido: ' + err.message);
     }
@@ -641,6 +664,87 @@ export default function App() {
       numComplemento: editNumComplemento
     });
     setEditingOrder(null);
+  };
+
+  // Guardar pedido pasado sin modificar el inventario
+  const selectedPastClient = useMemo(
+    () => clients.find((c) => c.id === pastClientId) || null,
+    [clients, pastClientId]
+  );
+
+  const pastSubtotal = useMemo(() => {
+    return pastItems.reduce((acc, row) => {
+      const prod = inventory.find((p) => p.sku === row.sku);
+      if (!prod) return acc;
+      const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedPastClient?.descuento || 0);
+      const precioFinal = (Number(prod.costoCaja) || 0) * (1 - descPct / 100);
+      return acc + precioFinal * (Number(row.cajas) || 0);
+    }, 0);
+  }, [pastItems, inventory, selectedPastClient]);
+
+  const pastIva = (pastSubtotal + (Number(pastEnvio) || 0)) * 0.16;
+  const pastTotal = pastSubtotal + (Number(pastEnvio) || 0) + pastIva;
+
+  const handleSavePastOrder = async (e) => {
+    e.preventDefault();
+    if (!isAdmin) return;
+    if (!selectedPastClient) return alert('Selecciona un Cliente o Distribuidor.');
+
+    const validLines = pastItems
+      .map((row) => {
+        const prod = inventory.find((p) => p.sku === row.sku);
+        if (!prod || (Number(row.cajas) || 0) <= 0) return null;
+        const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedPastClient.descuento || 0);
+        const precioFinal = (Number(prod.costoCaja) || 0) * (1 - descPct / 100);
+        const costoAdq = Number(prod.costoAdquisicion) || 0;
+        return {
+          prodId: prod.id,
+          sku: prod.sku,
+          descripcion: prod.descripcion,
+          cajas: Number(row.cajas),
+          descuentoPct: descPct,
+          precioFinal,
+          costoAdquisicion: costoAdq,
+          subtotal: precioFinal * Number(row.cajas),
+          utilidadLinea: (precioFinal - costoAdq) * Number(row.cajas)
+        };
+      })
+      .filter(Boolean);
+
+    if (!validLines.length) return alert('Agrega al menos un SKU con cantidad de cajas.');
+
+    const utilidadTotal = validLines.reduce((s, l) => s + (Number(l.utilidadLinea) || 0), 0);
+
+    await setDoc(doc(collection(db, 'pedidos')), {
+      folio: Number(pastFolio),
+      fecha: pastFecha || todayStr,
+      cliente: selectedPastClient.nombre,
+      direccion: selectedPastClient.direccion || '',
+      recogeBodega: pastRecoge,
+      ejecutivo: pastEjecutivo,
+      usuarioCorreo: user?.email || '',
+      partidas: validLines,
+      subtotal: pastSubtotal,
+      envio: Number(pastEnvio) || 0,
+      iva: pastIva,
+      total: pastTotal,
+      utilidadEstimada: utilidadTotal,
+      comentarios: pastComentarios,
+      facturado: pastFacturado,
+      numFactura: pastNumFactura,
+      pagado: pastPagado,
+      numComplemento: pastNumComplemento,
+      estatus: 'Histórico',
+      esHistorico: true
+    });
+
+    setPastItems([{ sku: '', cajas: 1, customDesc: null }]);
+    setPastEnvio(0);
+    setPastComentarios('');
+    setPastNumFactura('');
+    setPastNumComplemento('');
+    setShowPastOrderModal(false);
+    alert(`Pedido histórico #${pastFolio} guardado sin modificar el inventario.`);
   };
 
   const filteredInventory = useMemo(() => {
@@ -842,7 +946,8 @@ export default function App() {
       numFactura: '',
       pagado: 'No',
       numComplemento: '',
-      estatus: 'Confirmado'
+      estatus: 'Confirmado',
+      esHistorico: false
     });
 
     validLines.forEach((line) => {
@@ -890,7 +995,6 @@ export default function App() {
     return Object.values(pMap).sort((a, b) => b.cajas - a.cajas).slice(0, 8);
   }, [filteredSales]);
 
-  // Gráfica mensual del año seleccionado (para visualización en Dashboard)
   const monthlyChartData = useMemo(() => {
     const months = [
       { m: '01', label: 'Ene' }, { m: '02', label: 'Feb' }, { m: '03', label: 'Mar' },
@@ -1103,7 +1207,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 1: INVENTARIO (Títulos CSV + Precio por Paq antes de Costo por Caja + Foto de referencia Admin) */}
+        {/* TAB 1: INVENTARIO */}
         {activeTab === 'inventario' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
@@ -1283,7 +1387,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: COSTOS Y MÁRGENES (Solo Admin) */}
+        {/* TAB 2: COSTOS Y MÁRGENES */}
         {isAdmin && activeTab === 'margenes' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-wrap justify-between items-center gap-3">
@@ -1378,10 +1482,9 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: DASHBOARD VISUAL DE VENTAS CON GRÁFICAS + PDF HORIZONTAL */}
+        {/* TAB 3: DASHBOARD VISUAL DE VENTAS */}
         {isAdmin && activeTab === 'dashboard' && (
           <div className="space-y-5">
-            {/* Cabecera imprimible en horizontal */}
             <div className="bg-white p-5 rounded-xl border border-gray-200 space-y-4">
               <div className="flex flex-wrap justify-between items-center gap-3 border-b border-gray-200 pb-3">
                 <div className="flex items-center gap-3">
@@ -1438,7 +1541,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Controles de periodo y tipo de reporte */}
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs no-print">
                 <div>
                   <label className="block font-bold mb-1">Periodo</label>
@@ -1512,7 +1614,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* KPIs con acentos de color */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
                 <div className="p-4 rounded-xl border-l-4 border-[#2B5A45] bg-emerald-50/40">
                   <span className="text-xs text-gray-700 font-semibold block">Número de Pedidos / Ventas</span>
@@ -1538,7 +1639,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Gráficas Visuales: Tendencia Mensual del Año + Productos Más Vendidos */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-2">
                 <div className="border border-gray-200 rounded-xl p-4 bg-white">
                   <div className="flex justify-between items-center mb-3">
@@ -1550,7 +1650,7 @@ export default function App() {
                       const heightPct = maxMonthlyVal > 0 ? Math.max(4, Math.round((d.total / maxMonthlyVal) * 100)) : 4;
                       const isSelected = salesMode === 'mensual' && d.m === salesMonth;
                       return (
-                        <div key={d.m} className="flex-1 flex flex-col items-center justify-end h-full group">
+                        <div key={d.m} className="flex-1 flex flex-col items-center justify-end h-full">
                           <span className="text-[9px] font-bold text-gray-700 mb-1">
                             {d.cajas > 0 ? `${d.cajas}c` : ''}
                           </span>
@@ -1610,7 +1710,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Tablas de Reporte según selección (clic en pedido para editar comentarios/pago) */}
             {reportType === 'general' && (
               <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
                 <table className="w-full text-xs text-left">
@@ -1803,7 +1902,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: COTIZADOR (Fecha editable + Foto de referencia opcional por renglón) */}
+        {/* TAB 4: COTIZADOR */}
         {activeTab === 'cotizador' && (
           <div className="space-y-4">
             <div className="no-print bg-white p-4 rounded-xl border border-gray-200 space-y-4">
@@ -1875,7 +1974,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* DOCUMENTO DE COTIZACIÓN */}
             <div className="bg-white border border-gray-300 max-w-6xl mx-auto p-6 space-y-5 text-black">
               <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-gray-300 pb-4">
                 <div className="shrink-0">
@@ -2105,7 +2203,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Únicamente la imagen de la firma digital */}
                   <div className="pt-2">
                     {ejecutivoActual?.firmaUrl && (
                       <img
@@ -2147,7 +2244,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: DISTRIBUIDORES + HISTORIAL PERMANENTE DE PRODUCTOS (Solo Admin) */}
+        {/* TAB 5: CLIENTES / HISTORIAL */}
         {isAdmin && activeTab === 'clientes' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -2203,7 +2300,6 @@ export default function App() {
               </table>
             </div>
 
-            {/* Historial permanente de productos del cliente seleccionado */}
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
               <div className="flex flex-wrap justify-between items-center gap-3 border-b border-gray-200 pb-3">
                 <div>
@@ -2270,7 +2366,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 6: EJECUTIVOS Y FIRMAS (Solo Admin) */}
+        {/* TAB 6: EJECUTIVOS Y FIRMAS */}
         {isAdmin && activeTab === 'ejecutivos' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -2311,7 +2407,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 7: SOLICITUD DE PEDIDO A BODEGA (Solo Admin) */}
+        {/* TAB 7: NUEVA ORDEN */}
         {isAdmin && activeTab === 'pedido' && (
           <div className="bg-white p-6 rounded-xl border border-gray-200 max-w-6xl mx-auto space-y-6 text-black">
             <div className="flex flex-wrap justify-between items-center border-b border-gray-300 pb-4 gap-4">
@@ -2537,41 +2633,51 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 8: RÉCORD DE PEDIDOS (Clic para editar comentarios/pago + Eliminar con lógica de folio) */}
+        {/* TAB 8: RÉCORD DE PEDIDOS */}
         {isAdmin && activeTab === 'record' && (
           <div className="space-y-4">
-            <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
+            <div className="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-gray-200">
               <div>
                 <h2 className="font-bold text-lg text-black">Récord Histórico de Órdenes / Ventas</h2>
                 <p className="text-xs text-gray-600">Haz clic sobre cualquier pedido para agregar comentarios o gestionar facturación y pago.</p>
               </div>
-              <button
-                onClick={() =>
-                  exportToCSV(
-                    'record_pedidos_la_pajarita.csv',
-                    orders.map((o) => ({
-                      Folio: o.folio,
-                      Fecha: o.fecha,
-                      Cliente: o.cliente,
-                      Ejecutivo: o.ejecutivo,
-                      Recoge: o.recogeBodega,
-                      Subtotal: o.subtotal,
-                      Envio: o.envio,
-                      IVA: o.iva,
-                      Total: o.total,
-                      Comentarios: o.comentarios || '',
-                      Facturado: o.facturado || 'No',
-                      Num_Factura: o.numFactura || '',
-                      Pagado: o.pagado || 'No',
-                      Num_Complemento: o.numComplemento || ''
-                    }))
-                  )
-                }
-                style={{ backgroundColor: '#2B5A45' }}
-                className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-xs"
-              >
-                <Download className="w-4 h-4" /> Descargar Récord (CSV)
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setShowPastOrderModal(true)}
+                  style={{ backgroundColor: '#3D7A5E' }}
+                  className="flex items-center gap-1.5 text-white px-3.5 py-2 rounded-lg text-xs font-semibold hover:opacity-95"
+                >
+                  <Plus className="w-4 h-4" /> Agregar Pedido Pasado
+                </button>
+                <button
+                  onClick={() =>
+                    exportToCSV(
+                      'record_pedidos_la_pajarita.csv',
+                      orders.map((o) => ({
+                        Folio: o.folio,
+                        Fecha: o.fecha,
+                        Cliente: o.cliente,
+                        Ejecutivo: o.ejecutivo,
+                        Recoge: o.recogeBodega,
+                        Subtotal: o.subtotal,
+                        Envio: o.envio,
+                        IVA: o.iva,
+                        Total: o.total,
+                        Comentarios: o.comentarios || '',
+                        Facturado: o.facturado || 'No',
+                        Num_Factura: o.numFactura || '',
+                        Pagado: o.pagado || 'No',
+                        Num_Complemento: o.numComplemento || '',
+                        Tipo_Registro: o.esHistorico ? 'Histórico' : 'Activo'
+                      }))
+                    )
+                  }
+                  style={{ backgroundColor: '#2B5A45' }}
+                  className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-xs"
+                >
+                  <Download className="w-4 h-4" /> Descargar Récord (CSV)
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -2583,7 +2689,12 @@ export default function App() {
                 >
                   <div className="flex flex-wrap justify-between items-center border-b border-gray-200 pb-2 mb-2 gap-3">
                     <div>
-                      <span className="font-bold mr-3">Pedido #{ord.folio}</span>
+                      <span className="font-bold mr-2">Pedido #{ord.folio}</span>
+                      {ord.esHistorico && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-semibold mr-2">
+                          Histórico (sin tocar stock)
+                        </span>
+                      )}
                       <span className="font-semibold">{ord.cliente}</span>
                       <span className="text-xs text-gray-600 ml-3">{ord.fecha} • Ejecutivo: {ord.ejecutivo}</span>
                     </div>
@@ -2597,7 +2708,7 @@ export default function App() {
                           e.stopPropagation();
                           handleDeleteOrder(ord);
                         }}
-                        title="Eliminar pedido y regresar stock"
+                        title="Eliminar pedido"
                         className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Eliminar
@@ -2637,7 +2748,203 @@ export default function App() {
         )}
       </main>
 
-      {/* Modal para editar Comentarios e Información de Pago (privada para admins) */}
+      {/* Modal para agregar pedidos pasados (sin tocar inventario) */}
+      {isAdmin && showPastOrderModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <form onSubmit={handleSavePastOrder} className="bg-white rounded-xl p-6 max-w-2xl w-full space-y-4 text-black shadow-xl my-8">
+            <div className="flex justify-between items-center border-b border-gray-200 pb-3">
+              <div>
+                <h3 className="font-bold text-base">Agregar Pedido Pasado (Sin afectar inventario)</h3>
+                <p className="text-xs text-gray-600">Registra órdenes previas al consecutivo actual para historial y reportes.</p>
+              </div>
+              <button type="button" onClick={() => setShowPastOrderModal(false)} className="text-gray-500 hover:text-black">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <label className="block font-semibold mb-1">Folio Pedido *</label>
+                <input
+                  type="number"
+                  required
+                  value={pastFolio}
+                  onChange={(e) => setPastFolio(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2 bg-white font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Fecha *</label>
+                <input
+                  type="date"
+                  required
+                  value={pastFecha}
+                  onChange={(e) => setPastFecha(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Ejecutivo</label>
+                <select
+                  value={pastEjecutivo}
+                  onChange={(e) => setPastEjecutivo(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2 bg-white"
+                >
+                  {ejecutivos.map((ej) => <option key={ej.id} value={ej.nombre}>{ej.nombre}</option>)}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block font-semibold mb-1">Cliente / Distribuidor *</label>
+                <select
+                  value={pastClientId}
+                  onChange={(e) => setPastClientId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2 bg-white"
+                >
+                  <option value="">-- Seleccionar --</option>
+                  {clients.map((c) => <option key={c.id} value={c.id}>{c.nombre} ({c.descuento}% desc)</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">¿Recoge en Bodega?</label>
+                <select
+                  value={pastRecoge}
+                  onChange={(e) => setPastRecoge(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2 bg-white"
+                >
+                  <option value="NO">NO</option>
+                  <option value="SI">SÍ</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="font-semibold">Partidas del Pedido</div>
+              {pastItems.map((row, idx) => {
+                const prod = inventory.find((p) => p.sku === row.sku);
+                const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedPastClient?.descuento || 0);
+                const precioFinal = prod ? (Number(prod.costoCaja) || 0) * (1 - descPct / 100) : 0;
+                return (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                    <select
+                      value={row.sku}
+                      onChange={(e) => {
+                        const up = [...pastItems];
+                        up[idx].sku = e.target.value;
+                        setPastItems(up);
+                      }}
+                      className="col-span-5 border border-gray-300 rounded p-1.5 font-mono bg-white"
+                    >
+                      <option value="">SKU...</option>
+                      {inventory.map((p) => <option key={p.sku} value={p.sku}>{p.sku}</option>)}
+                    </select>
+                    <input
+                      type="number"
+                      min="1"
+                      value={row.cajas}
+                      onChange={(e) => {
+                        const up = [...pastItems];
+                        up[idx].cajas = e.target.value;
+                        setPastItems(up);
+                      }}
+                      className="col-span-2 border border-gray-300 rounded p-1.5 text-center bg-white"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={descPct}
+                      onChange={(e) => {
+                        const up = [...pastItems];
+                        up[idx].customDesc = e.target.value;
+                        setPastItems(up);
+                      }}
+                      className="col-span-2 border border-gray-300 rounded p-1.5 text-center bg-white"
+                    />
+                    <div className="col-span-2 text-right font-semibold">
+                      {formatCurrency(precioFinal * (Number(row.cajas) || 0))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPastItems(pastItems.filter((_, i) => i !== idx))}
+                      className="col-span-1 text-red-600 flex justify-center"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setPastItems([...pastItems, { sku: '', cajas: 1, customDesc: null }])}
+                className="text-xs font-semibold text-[#2B5A45] hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" /> Agregar SKU
+              </button>
+            </div>
+
+            <div className="space-y-1 text-xs">
+              <label className="block font-semibold">Comentarios</label>
+              <input
+                type="text"
+                placeholder="Notas u observaciones del pedido histórico..."
+                value={pastComentarios}
+                onChange={(e) => setPastComentarios(e.target.value)}
+                className="w-full border border-gray-300 rounded p-1.5 bg-white"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-emerald-50/40 border border-emerald-200 rounded-xl p-3">
+              <div>
+                <label className="block font-semibold mb-1">¿Ya se facturó?</label>
+                <select value={pastFacturado} onChange={(e) => setPastFacturado(e.target.value)} className="w-full border border-gray-300 rounded p-1.5 bg-white">
+                  <option value="No">No</option>
+                  <option value="Sí">Sí</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Número de factura</label>
+                <input type="text" value={pastNumFactura} onChange={(e) => setPastNumFactura(e.target.value)} className="w-full border border-gray-300 rounded p-1.5 bg-white" />
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">¿Ya pagó?</label>
+                <select value={pastPagado} onChange={(e) => setPastPagado(e.target.value)} className="w-full border border-gray-300 rounded p-1.5 bg-white">
+                  <option value="No">No</option>
+                  <option value="Sí">Sí</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Número de complemento de pago</label>
+                <input type="text" value={pastNumComplemento} onChange={(e) => setPastNumComplemento(e.target.value)} className="w-full border border-gray-300 rounded p-1.5 bg-white" />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-between items-center gap-3 pt-2 border-t border-gray-200 text-xs">
+              <div>
+                Envío ($):{' '}
+                <input
+                  type="number"
+                  min="0"
+                  value={pastEnvio}
+                  onChange={(e) => setPastEnvio(e.target.value)}
+                  className="w-24 border border-gray-300 rounded px-2 py-1 text-right bg-white"
+                />
+              </div>
+              <div className="font-bold text-sm">Total (c/IVA): {formatCurrency(pastTotal)}</div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowPastOrderModal(false)} className="px-4 py-2 text-xs border border-gray-300 rounded-lg">
+                Cancelar
+              </button>
+              <button type="submit" style={{ backgroundColor: '#2B5A45' }} className="px-4 py-2 text-xs text-white rounded-lg font-semibold">
+                Guardar Pedido Histórico
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Modal para editar Comentarios e Información de Pago */}
       {isAdmin && editingOrder && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSaveOrderDetails} className="bg-white rounded-xl p-6 max-w-lg w-full space-y-4 text-black shadow-xl">
@@ -2664,7 +2971,6 @@ export default function App() {
               />
             </div>
 
-            {/* Sección exclusiva para contacto@la-pajarita y eduardo@la-pajarita */}
             <div className="border border-emerald-200 bg-emerald-50/40 rounded-xl p-4 space-y-3">
               <h4 className="text-xs font-bold uppercase text-[#2B5A45] flex items-center gap-1.5">
                 <CreditCard className="w-4 h-4" /> Información de Pago y Facturación (Solo Administración)
