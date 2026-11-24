@@ -35,7 +35,10 @@ import {
   Search,
   LogOut,
   UserCheck,
-  Filter
+  Filter,
+  TrendingUp,
+  Percent,
+  BarChart3
 } from 'lucide-react';
 
 // Configuración oficial de tu proyecto Firebase
@@ -54,13 +57,12 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 
-// Únicos correos con permisos de edición, precios, valor de stock y pedidos
+// Únicos correos con permisos de edición, costos/márgenes, dashboard de ventas y pedidos
 const ADMIN_EMAILS = [
   'contacto@la-pajarita.com.mx',
   'eduardo@la-pajarita.com.mx'
 ];
 
-// Helper para convertir links de Drive en URL directa visible en <img>
 const toDirectDriveImg = (url) => {
   if (!url) return '';
   const match = url.match(/\/d\/([^/]+)|id=([^&]+)/);
@@ -70,47 +72,47 @@ const toDirectDriveImg = (url) => {
 
 const LOGO_LA_PAJARITA_URL = 'https://drive.google.com/file/d/1Kutnzqe7wWMXIowoS7bpeiPO5nJT9K4K/view?usp=drive_link';
 
-// Catálogo inicial migrado de tu inventario (39 SKUs)
+// Catálogo inicial migrado de "Inventario actualizado - Inventario a utilizar para cotizaciones___.csv"
 const INITIAL_INVENTORY = [
-  { sku: '100BLBANE400', descripcion: 'MI MANTELES 100X100 400 HJS. BALI NEGRO', stock: 0, costoCaja: 0, uPq: 0, pCaja: 0 },
-  { sku: '20AI2T', descripcion: 'SERV 20X20 AIRLAID 20 PAQ DE 70 HJS. BLANCO', stock: 0, costoCaja: 0, uPq: 0, pCaja: 0 },
-  { sku: '20AZM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC AZUL MAR 20PQ.100H. PLEGADO 1/4', stock: 82, costoCaja: 973.49, uPq: 100, pCaja: 1 },
-  { sku: '20BLM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC 20PQ.100H. BLANCO PLEGADO 1/4', stock: 24, costoCaja: 973.49, uPq: 100, pCaja: 1 },
-  { sku: '20GOM/20PG', descripcion: 'PAQ. SERV. 20x20 MICROPUNTO GO GREEN PAPEL RECICLADO 20 PQ.100H PLEGADO 1/4', stock: 75, costoCaja: 1322.33, uPq: 100, pCaja: 20 },
-  { sku: '20NEM/20PNE', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PUNTA-PUNTA PAPEL BASIC 32PQ.100H. NEGRA PLEGADO 1/4', stock: 14, costoCaja: 1736.87, uPq: 100, pCaja: 20 },
-  { sku: '20PAZ', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA DE PAPEL BASIC AZUL 32PQ.100H. PLEGADO 1/4', stock: 3, costoCaja: 1736.87, uPq: 100, pCaja: 20 },
-  { sku: '20PBL', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA DE PAPEL BASIC BLANCA 32PQ.100H. PLEGADO 1/4', stock: 39, costoCaja: 1322.33, uPq: 100, pCaja: 32 },
-  { sku: '20PBLI2T', descripcion: 'PAQ. SERV. 20X20 PUNTA BCA 48 PAQ DE 100 HJS.', stock: 0, costoCaja: 0, uPq: 0, pCaja: 0 },
-  { sku: '20PG', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA GO GREEN PAPEL RECICLADO 32PQ.100H. PLEGADO 1/4', stock: 33, costoCaja: 1322.33, uPq: 100, pCaja: 32 },
-  { sku: '20PNE', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA PAPEL BASIC NEGRO 32PQ.100H. PLEGADO 1/4', stock: 33, costoCaja: 1736.87, uPq: 100, pCaja: 20 },
-  { sku: '20PNEI', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA NEGRO IMPRESO 1 TINTA 48 PQ. 100', stock: 0, costoCaja: 0, uPq: 100, pCaja: 0 },
-  { sku: '20PNEPA', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA NEGRO 20PQ.120H. PLEGADO AMERICANO', stock: 3, costoCaja: 1736.87, uPq: 120, pCaja: 20 },
-  { sku: '20ROM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC ROJO 20 PQ.100H. PLEGADO 1/4', stock: 90, costoCaja: 1736.87, uPq: 100, pCaja: 16 },
-  { sku: '20VOM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC VERDE OSCURO 20PQ.100H. PLEGADO 1/4', stock: 56, costoCaja: 1736.87, uPq: 100, pCaja: 16 },
-  { sku: '2535ago', descripcion: 'MANTELES 25X35 AIRLAID GO GREEN 800 UD.', stock: 70, costoCaja: 2785.39, uPq: 800, pCaja: 1 },
-  { sku: '2535ANE', descripcion: 'MANTELES 25X35 AIRLAID NEGRO 800 UD.', stock: 71, costoCaja: 4039.35, uPq: 800, pCaja: 20 },
-  { sku: '2535FAZ50', descripcion: 'MIL MANTELES 25x35 50 GR. BLANCO+AZUL', stock: 46, costoCaja: 2458.56, uPq: 1000, pCaja: 12 },
-  { sku: '2535FNE50', descripcion: 'MIL MANTELES 25x35 50 GR. BLANCO+NEGRO', stock: 47, costoCaja: 2458.56, uPq: 1000, pCaja: 24 },
-  { sku: '2535FRO50', descripcion: 'MIL MANTELES 25x35 50 GR. ROJO BLANCO+ROJO', stock: 46, costoCaja: 2458.56, uPq: 1000, pCaja: 24 },
-  { sku: '25PBL', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL BASIC BLANCA 63 PQ. 50 H. PLEGADO 1/4', stock: 0, costoCaja: 1791.23, uPq: 50, pCaja: 20 },
-  { sku: '25PBLI', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA BLANCO', stock: 24, costoCaja: 1791.23, uPq: 50, pCaja: 20 },
-  { sku: '25PG', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 63 PQ. 50 H. PLEGADO 1/4', stock: 55, costoCaja: 1875.27, uPq: 50, pCaja: 20 },
-  { sku: '25PNE', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL BASIC NEGRO 63 PQ. 50 H. PLEGADO 1/4', stock: 0, costoCaja: 2458.23, uPq: 50, pCaja: 12 },
-  { sku: '3040PBL', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA PAPEL BASIC BLANCA 48PQ. PAQ. 50 H. PLEGADO 1/6', stock: 0, costoCaja: 2017.01, uPq: 50, pCaja: 48 },
-  { sku: '3040PBLI2T', descripcion: 'PAQ. SERV. 30X40 PUNTA BCA 24 PAQ DE 50 HJS.', stock: 0, costoCaja: 0, uPq: 0, pCaja: 0 },
-  { sku: '3040PBLNAAZ', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES AZUL 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 1, costoCaja: 1190.60, uPq: 50, pCaja: 6 },
-  { sku: '3040PBLNANE', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES NEGRO 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 38, costoCaja: 1190.60, uPq: 50, pCaja: 6 },
-  { sku: '3040PBLNARO', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES ROJO 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 37, costoCaja: 1190.60, uPq: 50, pCaja: 6 },
-  { sku: '3040PBLNAVE', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES VERDE 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 1, costoCaja: 1190.60, uPq: 50, pCaja: 6 },
-  { sku: '3040PG', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 48 PQ. PAQ. 50 H. PLEGADO 1/6', stock: 142, costoCaja: 1976.99, uPq: 50, pCaja: 20 },
-  { sku: '332GTRNE', descripcion: 'PAQ. SERV. 33x33 2/C PUNTA-PUNTA PAPEL RECICLADO GO GREEN TRIPOLI NEGRO 42PQ. 100 H. PLEGADO 1/4', stock: 37, costoCaja: 3267.63, uPq: 100, pCaja: 48 },
-  { sku: '4020PBL', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC BLANCA 16PQ.100H. PLEGADO 1/4', stock: 57, costoCaja: 950.14, uPq: 100, pCaja: 2 },
-  { sku: '4020PBU', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC BURDEOS 16PQ.100H. PLEGADO 1/4', stock: 3, costoCaja: 1592.13, uPq: 100, pCaja: 24 },
-  { sku: '4020PG', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 16PQ.100H. PLEGADO 1/4', stock: 17, costoCaja: 950.14, uPq: 100, pCaja: 2 },
-  { sku: '4020PNE', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC NEGRO 16PQ.100H. PLEGADO 1/4', stock: 21, costoCaja: 1592.13, uPq: 100, pCaja: 24 },
-  { sku: '4032AKBLA', descripcion: 'PAQ. SERV. 40x32 AIRLAID BASIC BLANCO 20P.40 UND. PLEGADO KANGAROO', stock: 88, costoCaja: 2611.97, uPq: 40, pCaja: 20 },
-  { sku: '4032AKBLI', descripcion: 'PAQ. SERV. 40x32 AIRLAID KANGAROO 20P.40 UND. BLANCO IMPRESO (Confirmar Precio)', stock: 0, costoCaja: 2611.97, uPq: 40, pCaja: 24 },
-  { sku: '4032PKNE', descripcion: 'SERV PUNTA COLOR CANGURO NEGRO P/40 C-24', stock: 86, costoCaja: 0, uPq: 40, pCaja: 24 }
+  { sku: '100BLBANE400', descripcion: 'MI MANTELES 100X100 400 HJS. BALI NEGRO', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
+  { sku: '20AI2T', descripcion: 'SERV 20X20 AIRLAID 20 PAQ DE 70 HJS. BLANCO', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
+  { sku: '20AZM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC AZUL MAR 20PQ.100H. PLEGADO 1/4', stock: 82, precioPaq: 973.49, costoCaja: 973.49, costoUnidad: 9.73, uPq: 100, pCaja: 1, totalProdCaja: 100, cPalet: 24, volumen: 0.0085, peso: 0.05, costoAdquisicion: 681.44 },
+  { sku: '20BLM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC 20PQ.100H. BLANCO PLEGADO 1/4', stock: 24, precioPaq: 973.49, costoCaja: 973.49, costoUnidad: 9.73, uPq: 100, pCaja: 1, totalProdCaja: 100, cPalet: 24, volumen: 0.0085, peso: 0.05, costoAdquisicion: 681.44 },
+  { sku: '20GOM/20PG', descripcion: 'PAQ. SERV. 20x20 MICROPUNTO GO GREEN PAPEL RECICLADO 20 PQ.100H PLEGADO 1/4', stock: 75, precioPaq: 66.12, costoCaja: 1322.33, costoUnidad: 0.66, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 60, volumen: 0.0013, peso: 3.6, costoAdquisicion: 925.63 },
+  { sku: '20NEM/20PNE', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PUNTA-PUNTA PAPEL BASIC 32PQ.100H. NEGRA PLEGADO 1/4', stock: 14, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.87, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1215.81 },
+  { sku: '20PAZ', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA DE PAPEL BASIC AZUL 32PQ.100H. PLEGADO 1/4', stock: 3, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.87, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 38, volumen: 0.0001, peso: 0.055, costoAdquisicion: 1215.81 },
+  { sku: '20PBL', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA DE PAPEL BASIC BLANCA 32PQ.100H. PLEGADO 1/4', stock: 39, precioPaq: 41.32, costoCaja: 1322.33, costoUnidad: 0.41, uPq: 100, pCaja: 32, totalProdCaja: 3200, cPalet: 38, volumen: 0.0013, peso: 3.4, costoAdquisicion: 925.63 },
+  { sku: '20PBLI2T', descripcion: 'PAQ. SERV. 20X20 PUNTA BCA 48 PAQ DE 100 HJS.', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 100, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
+  { sku: '20PG', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA GO GREEN PAPEL RECICLADO 32PQ.100H. PLEGADO 1/4', stock: 33, precioPaq: 41.32, costoCaja: 1322.33, costoUnidad: 0.41, uPq: 100, pCaja: 32, totalProdCaja: 3200, cPalet: 38, volumen: 0.0022, peso: 3.4, costoAdquisicion: 925.63 },
+  { sku: '20PNE', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA PAPEL BASIC NEGRO 32PQ.100H. PLEGADO 1/4', stock: 33, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.87, uPq: 100, pCaja: 20, totalProdCaja: 2000, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1215.81 },
+  { sku: '20PNEI', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA NEGRO IMPRESO 1 TINTA 48 PQ. 100', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 100, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
+  { sku: '20PNEPA', descripcion: 'PAQ. SERV. 20x20 PUNTA-PUNTA NEGRO 20PQ.120H. PLEGADO AMERICANO', stock: 3, precioPaq: 86.84, costoCaja: 1736.87, costoUnidad: 0.72, uPq: 120, pCaja: 20, totalProdCaja: 2400, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1215.81 },
+  { sku: '20ROM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC ROJO 20 PQ.100H. PLEGADO 1/4', stock: 90, precioPaq: 108.55, costoCaja: 1736.87, costoUnidad: 1.09, uPq: 100, pCaja: 16, totalProdCaja: 1600, cPalet: 38, volumen: 0.0022, peso: 3.6, costoAdquisicion: 1215.81 },
+  { sku: '20VOM', descripcion: 'PAQ. SERV. 20x20 2/C MICROPUNTO PAPEL BASIC VERDE OSCURO 20PQ.100H. PLEGADO 1/4', stock: 56, precioPaq: 108.55, costoCaja: 1736.87, costoUnidad: 1.09, uPq: 100, pCaja: 16, totalProdCaja: 1600, cPalet: 38, volumen: 0.0022, peso: 3.4, costoAdquisicion: 1215.81 },
+  { sku: '2535ago', descripcion: 'MANTELES 25X35 AIRLAID GO GREEN 800 UD.', stock: 70, precioPaq: 2785.39, costoCaja: 2785.39, costoUnidad: 3.48, uPq: 800, pCaja: 1, totalProdCaja: 800, cPalet: 24, volumen: 0.0022, peso: 2.9, costoAdquisicion: 1949.77 },
+  { sku: '2535ANE', descripcion: 'MANTELES 25X35 AIRLAID NEGRO 800 UD.', stock: 71, precioPaq: 201.97, costoCaja: 4039.35, costoUnidad: 5.05, uPq: 800, pCaja: 20, totalProdCaja: 16000, cPalet: 24, volumen: 0.0022, peso: 2.8, costoAdquisicion: 2827.55 },
+  { sku: '2535FAZ50', descripcion: 'MIL MANTELES 25x35 50 GR. BLANCO+AZUL', stock: 46, precioPaq: 204.88, costoCaja: 2458.56, costoUnidad: 0.2, uPq: 1000, pCaja: 12, totalProdCaja: 12000, cPalet: 24, volumen: 0.0022, peso: 1.8, costoAdquisicion: 1720.99 },
+  { sku: '2535FNE50', descripcion: 'MIL MANTELES 25x35 50 GR. BLANCO+NEGRO', stock: 47, precioPaq: 102.44, costoCaja: 2458.56, costoUnidad: 0.1, uPq: 1000, pCaja: 24, totalProdCaja: 24000, cPalet: 24, volumen: 0.0022, peso: 1.8, costoAdquisicion: 1720.99 },
+  { sku: '2535FRO50', descripcion: 'MIL MANTELES 25x35 50 GR. ROJO BLANCO+ROJO', stock: 46, precioPaq: 102.44, costoCaja: 2458.56, costoUnidad: 0.1, uPq: 1000, pCaja: 24, totalProdCaja: 24000, cPalet: 24, volumen: 0.0022, peso: 1.8, costoAdquisicion: 1720.99 },
+  { sku: '25PBL', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL BASIC BLANCA 63 PQ. 50 H. PLEGADO 1/4', stock: 0, precioPaq: 89.56, costoCaja: 1791.23, costoUnidad: 1.79, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0013, peso: 2.8, costoAdquisicion: 1253.86 },
+  { sku: '25PBLI', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA BLANCO', stock: 24, precioPaq: 89.56, costoCaja: 1791.23, costoUnidad: 1.79, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0022, peso: 2.7, costoAdquisicion: 1253.86 },
+  { sku: '25PG', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 63 PQ. 50 H. PLEGADO 1/4', stock: 55, precioPaq: 93.76, costoCaja: 1875.27, costoUnidad: 1.88, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0022, peso: 2.8, costoAdquisicion: 1312.69 },
+  { sku: '25PNE', descripcion: 'PAQ. SERV. 25x25 PUNTA-PUNTA PAPEL BASIC NEGRO 63 PQ. 50 H. PLEGADO 1/4', stock: 0, precioPaq: 204.85, costoCaja: 2458.23, costoUnidad: 4.1, uPq: 50, pCaja: 12, totalProdCaja: 600, cPalet: 38, volumen: 0.0013, peso: 2.8, costoAdquisicion: 1720.76 },
+  { sku: '3040PBL', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA PAPEL BASIC BLANCA 48PQ. PAQ. 50 H. PLEGADO 1/6', stock: 0, precioPaq: 42.02, costoCaja: 2017.01, costoUnidad: 0.84, uPq: 50, pCaja: 48, totalProdCaja: 2400, cPalet: 38, volumen: 0.0022, peso: 3.1, costoAdquisicion: 1411.91 },
+  { sku: '3040PBLI2T', descripcion: 'PAQ. SERV. 30X40 PUNTA BCA 24 PAQ DE 50 HJS.', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0 },
+  { sku: '3040PBLNAAZ', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES AZUL 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 1, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42 },
+  { sku: '3040PBLNANE', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES NEGRO 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 38, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42 },
+  { sku: '3040PBLNARO', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES ROJO 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 37, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42 },
+  { sku: '3040PBLNAVE', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA NAPOLES VERDE 24PQ. PAQ. 50H. PLEGADO 1/6', stock: 1, precioPaq: 198.43, costoCaja: 1190.6, costoUnidad: 3.97, uPq: 50, pCaja: 6, totalProdCaja: 300, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 833.42 },
+  { sku: '3040PG', descripcion: 'PAQ. SERV. 30x40 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 48 PQ. PAQ. 50 H. PLEGADO 1/6', stock: 142, precioPaq: 98.85, costoCaja: 1976.99, costoUnidad: 1.98, uPq: 50, pCaja: 20, totalProdCaja: 1000, cPalet: 38, volumen: 0.0022, peso: 3.2, costoAdquisicion: 1383.89 },
+  { sku: '332GTRNE', descripcion: 'PAQ. SERV. 33x33 2/C PUNTA-PUNTA PAPEL RECICLADO GO GREEN TRIPOLI NEGRO 42PQ. 100 H. PLEGADO 1/4', stock: 37, precioPaq: 68.08, costoCaja: 3267.63, costoUnidad: 0.68, uPq: 100, pCaja: 48, totalProdCaja: 4800, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 2287.34 },
+  { sku: '4020PBL', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC BLANCA 16PQ.100H. PLEGADO 1/4', stock: 57, precioPaq: 475.07, costoCaja: 950.14, costoUnidad: 4.75, uPq: 100, pCaja: 2, totalProdCaja: 200, cPalet: 38, volumen: 0.0013, peso: 3.1, costoAdquisicion: 665.1 },
+  { sku: '4020PBU', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC BURDEOS 16PQ.100H. PLEGADO 1/4', stock: 3, precioPaq: 66.34, costoCaja: 1592.13, costoUnidad: 0.66, uPq: 100, pCaja: 24, totalProdCaja: 2400, cPalet: 38, volumen: 0.0001, peso: 0.05, costoAdquisicion: 1114.49 },
+  { sku: '4020PG', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL RECICLADO GO GREEN 16PQ.100H. PLEGADO 1/4', stock: 17, precioPaq: 475.07, costoCaja: 950.14, costoUnidad: 4.75, uPq: 100, pCaja: 2, totalProdCaja: 200, cPalet: 38, volumen: 0.0022, peso: 3.2, costoAdquisicion: 665.1 },
+  { sku: '4020PNE', descripcion: 'PAQ. SERV. 40x20 PUNTA-PUNTA PAPEL BASIC NEGRO 16PQ.100H. PLEGADO 1/4', stock: 21, precioPaq: 66.34, costoCaja: 1592.13, costoUnidad: 0.66, uPq: 100, pCaja: 24, totalProdCaja: 2400, cPalet: 38, volumen: 0.0013, peso: 3.1, costoAdquisicion: 1114.49 },
+  { sku: '4032AKBLA', descripcion: 'PAQ. SERV. 40x32 AIRLAID BASIC BLANCO 20P.40 UND. PLEGADO KANGAROO', stock: 88, precioPaq: 130.6, costoCaja: 2611.97, costoUnidad: 3.26, uPq: 40, pCaja: 20, totalProdCaja: 800, cPalet: 38, volumen: 0.0013, peso: 2.9, costoAdquisicion: 1828.38 },
+  { sku: '4032AKBLI', descripcion: 'PAQ. SERV. 40x32 AIRLAID KANGAROO 20P.40 UND. BLANCO IMPRESO (Confirmar Precio)', stock: 0, precioPaq: 108.83, costoCaja: 2611.97, costoUnidad: 2.72, uPq: 40, pCaja: 24, totalProdCaja: 960, cPalet: 24, volumen: 0.0013, peso: 2.8, costoAdquisicion: 1828.38 },
+  { sku: '4032PKNE', descripcion: 'SERV PUNTA COLOR CANGURO NEGRO P/40 C-24', stock: 86, precioPaq: 0, costoCaja: 0, costoUnidad: 0, uPq: 40, pCaja: 24, totalProdCaja: 960, cPalet: 24, volumen: 0.0013, peso: 2.9, costoAdquisicion: 0 }
 ];
 
 const INITIAL_CLIENTS = [
@@ -155,6 +157,15 @@ const formatCurrency = (val, decimals = 2) =>
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
   }).format(Number(val) || 0);
+
+const parseNumberClean = (val) => {
+  if (val === undefined || val === null) return 0;
+  const s = String(val).trim();
+  if (!s || s.startsWith('#') || s.toUpperCase().includes('NO HAY')) return 0;
+  const cleaned = s.replace(/[$,]/g, '').trim();
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+};
 
 const extractSize = (sku, desc) => {
   const text = `${sku} ${desc}`.toLowerCase();
@@ -210,8 +221,20 @@ export default function App() {
   const [filterSize, setFilterSize] = useState('Todos');
   const [filterMaterial, setFilterMaterial] = useState('Todos');
 
+  // Filtros Dashboard de Ventas
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [salesMode, setSalesMode] = useState('mensual'); // 'mensual' | 'anual'
+  const [salesYear, setSalesYear] = useState(String(new Date().getFullYear()));
+  const [salesMonth, setSalesMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const [reportType, setReportType] = useState('general'); // 'general' | 'distribuidor' | 'vendedor'
+  const [selectedDistributorReport, setSelectedDistributorReport] = useState('Todos');
+  const [selectedSellerReport, setSelectedSellerReport] = useState('Todos');
+
   // Modales Admin
-  const [newProd, setNewProd] = useState({ sku: '', descripcion: '', stock: 0, costoCaja: 0, uPq: 0, pCaja: 0 });
+  const [newProd, setNewProd] = useState({
+    sku: '', descripcion: '', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0,
+    uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0
+  });
   const [showProdModal, setShowProdModal] = useState(false);
 
   const [newClient, setNewClient] = useState({ nombre: '', tipo: 'Distribuidor', descuento: 30, contacto: '', telefono: '', correo: '', rfc: '', direccion: '' });
@@ -220,8 +243,9 @@ export default function App() {
   const [newEjec, setNewEjec] = useState({ nombre: '', firmaUrl: '' });
   const [showEjecModal, setShowEjecModal] = useState(false);
 
-  // Estado Cotizador
+  // Estado Cotizador (con fecha editable igual que Pedido)
   const [cotFolio, setCotFolio] = useState(1001);
+  const [cotFecha, setCotFecha] = useState(todayStr);
   const [cotClientId, setCotClientId] = useState('');
   const [cotClienteManual, setCotClienteManual] = useState('');
   const [cotContactoManual, setCotContactoManual] = useState('');
@@ -235,6 +259,7 @@ export default function App() {
 
   // Estado Orden de Pedido
   const [ordFolio, setOrdFolio] = useState(188);
+  const [ordFecha, setOrdFecha] = useState(todayStr);
   const [ordClientId, setOrdClientId] = useState('');
   const [ordRecoge, setOrdRecoge] = useState('NO');
   const [ordEnvio, setOrdEnvio] = useState(0);
@@ -334,7 +359,7 @@ export default function App() {
         batch.set(doc(db, 'ejecutivos', ej.id), ej);
       });
       await batch.commit();
-      alert('Catálogo de 39 SKUs, distribuidores y las 5 firmas cargados en Firebase.');
+      alert('Catálogo de 129 SKUs, distribuidores y las 5 firmas cargados en Firebase.');
     } catch (e) {
       alert('Error al cargar datos iniciales: ' + e.message);
     } finally {
@@ -342,7 +367,7 @@ export default function App() {
     }
   };
 
-  // Importación segura de CSV por encabezados exactos (sku,descripcion,stock,costoCaja,uPq,pCaja)
+  // Importación segura usando los títulos de tu CSV y sin alterar otros datos
   const handleCsvUpload = (e) => {
     if (!isAdmin) return;
     const file = e.target.files?.[0];
@@ -354,39 +379,83 @@ export default function App() {
       const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
       if (lines.length < 2) return alert('El archivo CSV está vacío.');
 
-      const rawHeaders = parseCsvLine(lines[0]).map((h) => h.toLowerCase().trim());
-      const idxSku = rawHeaders.indexOf('sku');
-      const idxDesc = rawHeaders.indexOf('descripcion');
-      const idxStock = rawHeaders.indexOf('stock');
-      const idxCosto = rawHeaders.indexOf('costocaja');
-      const idxUPq = rawHeaders.indexOf('upq');
-      const idxPCaja = rawHeaders.indexOf('pcaja');
+      // Busca la fila que contenga 'sku' como encabezado (útil si tiene filas superiores de búsqueda)
+      let headerRowIdx = lines.findIndex((l) => {
+        const cols = parseCsvLine(l).map((c) => c.toLowerCase().trim());
+        return cols.includes('sku');
+      });
+      if (headerRowIdx === -1) headerRowIdx = 0;
+
+      const rawHeaders = parseCsvLine(lines[headerRowIdx]).map((h) => h.toLowerCase().trim());
+      const findCol = (...names) => {
+        for (const n of names) {
+          const i = rawHeaders.indexOf(n.toLowerCase());
+          if (i !== -1) return i;
+        }
+        return -1;
+      };
+
+      const idxSku = findCol('sku');
+      const idxDesc = findCol('descripción', 'descripcion');
+      const idxStock = findCol('stock');
+      const idxPrecioPaq = findCol('precio por paq', 'preciopaq');
+      const idxCostoCaja = findCol('costo por caja', 'costocaja');
+      const idxCostoUnidad = findCol('costo unidad', 'costounidad');
+      const idxUPq = findCol('u/pq', 'upq');
+      const idxPCaja = findCol('p/caja', 'pcaja');
+      const idxTotalProd = findCol('total de prod en caja', 'totalprodcaja');
+      const idxCPalet = findCol('c/palet', 'cpalet');
+      const idxVolumen = findCol('volumen');
+      const idxPeso = findCol('peso');
+      const idxAdq = findCol('costo adquisicion', 'costo adquisición', 'costoadquisicion');
 
       if (idxSku === -1 || idxDesc === -1) {
-        return alert(
-          'El CSV debe incluir al menos las columnas: sku, descripcion, stock, costoCaja, uPq, pCaja'
-        );
+        return alert('El CSV debe incluir al menos las columnas SKU y Descripción.');
       }
 
       const batch = writeBatch(db);
       let count = 0;
 
-      for (let i = 1; i < lines.length; i++) {
+      for (let i = headerRowIdx + 1; i < lines.length; i++) {
         const cols = parseCsvLine(lines[i]);
         const sku = cols[idxSku] || '';
         const descripcion = cols[idxDesc] || '';
-        if (!sku || !descripcion) continue;
+        if (!sku || !descripcion || sku.toLowerCase() === 'sku') continue;
 
         const existing = inventory.find((p) => p.sku.toLowerCase() === sku.toLowerCase());
-        const stock = idxStock !== -1 && cols[idxStock] !== '' ? Number(cols[idxStock]) || 0 : (existing?.stock ?? 0);
-        const costoCaja = idxCosto !== -1 && cols[idxCosto] !== '' ? Number(cols[idxCosto]) || 0 : (existing?.costoCaja ?? 0);
-        const uPq = idxUPq !== -1 && cols[idxUPq] !== '' ? Number(cols[idxUPq]) || 0 : (existing?.uPq ?? 0);
-        const pCaja = idxPCaja !== -1 && cols[idxPCaja] !== '' ? Number(cols[idxPCaja]) || 0 : (existing?.pCaja ?? 0);
+        const stock = idxStock !== -1 && cols[idxStock] !== '' ? parseNumberClean(cols[idxStock]) : (existing?.stock ?? 0);
+        const costoCaja = idxCostoCaja !== -1 && cols[idxCostoCaja] !== '' ? parseNumberClean(cols[idxCostoCaja]) : (existing?.costoCaja ?? 0);
+        const pCaja = idxPCaja !== -1 && cols[idxPCaja] !== '' ? parseNumberClean(cols[idxPCaja]) : (existing?.pCaja ?? 0);
+        const precioPaq =
+          idxPrecioPaq !== -1 && cols[idxPrecioPaq] !== '' && !String(cols[idxPrecioPaq]).includes('#') && !String(cols[idxPrecioPaq]).toUpperCase().includes('NO HAY')
+            ? parseNumberClean(cols[idxPrecioPaq])
+            : (pCaja > 0 && costoCaja > 0 ? Number((costoCaja / pCaja).toFixed(2)) : (existing?.precioPaq ?? 0));
+        const costoUnidad = idxCostoUnidad !== -1 && cols[idxCostoUnidad] !== '' ? parseNumberClean(cols[idxCostoUnidad]) : (existing?.costoUnidad ?? 0);
+        const uPq = idxUPq !== -1 && cols[idxUPq] !== '' ? parseNumberClean(cols[idxUPq]) : (existing?.uPq ?? 0);
+        const totalProdCaja = idxTotalProd !== -1 && cols[idxTotalProd] !== '' ? parseNumberClean(cols[idxTotalProd]) : (existing?.totalProdCaja ?? 0);
+        const cPalet = idxCPalet !== -1 && cols[idxCPalet] !== '' ? parseNumberClean(cols[idxCPalet]) : (existing?.cPalet ?? 0);
+        const volumen = idxVolumen !== -1 && cols[idxVolumen] !== '' ? parseNumberClean(cols[idxVolumen]) : (existing?.volumen ?? 0);
+        const peso = idxPeso !== -1 && cols[idxPeso] !== '' ? parseNumberClean(cols[idxPeso]) : (existing?.peso ?? 0);
+        const costoAdquisicion = idxAdq !== -1 && cols[idxAdq] !== '' ? parseNumberClean(cols[idxAdq]) : (existing?.costoAdquisicion ?? Number((costoCaja * 0.7).toFixed(2)));
 
         const safeId = existing?.id || sku.replace(/\//g, '_');
         batch.set(
           doc(db, 'inventario', safeId),
-          { sku, descripcion, stock, costoCaja, uPq, pCaja },
+          {
+            sku,
+            descripcion,
+            stock,
+            precioPaq,
+            costoCaja,
+            costoUnidad,
+            uPq,
+            pCaja,
+            totalProdCaja,
+            cPalet,
+            volumen,
+            peso,
+            costoAdquisicion
+          },
           { merge: true }
         );
         count++;
@@ -419,19 +488,39 @@ export default function App() {
     await updateDoc(doc(db, 'inventario', item.id), { stock: newStock });
   };
 
+  const handleUpdateAdquisicion = async (item, nuevoCostoAdq) => {
+    if (!isAdmin) return;
+    await updateDoc(doc(db, 'inventario', item.id), {
+      costoAdquisicion: Number(nuevoCostoAdq) || 0
+    });
+  };
+
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     if (!isAdmin || !newProd.sku) return;
     const safeId = newProd.sku.trim().replace(/\//g, '_');
+    const cCaja = Number(newProd.costoCaja) || 0;
+    const pC = Number(newProd.pCaja) || 0;
+    const pPaq = Number(newProd.precioPaq) || (cCaja > 0 && pC > 0 ? Number((cCaja / pC).toFixed(2)) : 0);
     await setDoc(doc(db, 'inventario', safeId), {
       ...newProd,
       sku: newProd.sku.trim(),
       stock: Number(newProd.stock) || 0,
-      costoCaja: Number(newProd.costoCaja) || 0,
+      precioPaq: pPaq,
+      costoCaja: cCaja,
+      costoUnidad: Number(newProd.costoUnidad) || 0,
       uPq: Number(newProd.uPq) || 0,
-      pCaja: Number(newProd.pCaja) || 0
+      pCaja: pC,
+      totalProdCaja: Number(newProd.totalProdCaja) || 0,
+      cPalet: Number(newProd.cPalet) || 0,
+      volumen: Number(newProd.volumen) || 0,
+      peso: Number(newProd.peso) || 0,
+      costoAdquisicion: Number(newProd.costoAdquisicion) || 0
     });
-    setNewProd({ sku: '', descripcion: '', stock: 0, costoCaja: 0, uPq: 0, pCaja: 0 });
+    setNewProd({
+      sku: '', descripcion: '', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0,
+      uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0
+    });
     setShowProdModal(false);
   };
 
@@ -456,7 +545,6 @@ export default function App() {
     setShowEjecModal(false);
   };
 
-  // Eliminar un pedido del récord y regresar el stock a inventario
   const handleDeleteOrder = async (order) => {
     if (!isAdmin) return;
     const confirmar = window.confirm(
@@ -466,7 +554,6 @@ export default function App() {
 
     try {
       const batch = writeBatch(db);
-
       if (Array.isArray(order.partidas)) {
         order.partidas.forEach((line) => {
           const cajasARegresar = Number(line.cajas) || 0;
@@ -480,7 +567,6 @@ export default function App() {
           }
         });
       }
-
       batch.delete(doc(db, 'pedidos', order.id));
       await batch.commit();
       alert(`Pedido #${order.folio} eliminado y stock devuelto al inventario.`);
@@ -489,7 +575,6 @@ export default function App() {
     }
   };
 
-  // Filtrado inteligente compartido (SKU, Tamaño, Material)
   const filteredInventory = useMemo(() => {
     return inventory.filter((p) => {
       const matchText =
@@ -514,7 +599,7 @@ export default function App() {
     const costoCajaBase = Number(prod.costoCaja) || 0;
     const pCaja = Number(prod.pCaja) || 1;
     const uPq = Number(prod.uPq) || 0;
-    const precioPaqBase = pCaja > 0 ? costoCajaBase / pCaja : costoCajaBase;
+    const precioPaqBase = Number(prod.precioPaq) > 0 ? Number(prod.precioPaq) : (pCaja > 0 ? costoCajaBase / pCaja : costoCajaBase);
 
     const baseSeleccionada = unidadVenta === 'paquete' ? precioPaqBase : costoCajaBase;
     const paqEnSeleccion = unidadVenta === 'paquete' ? 1 : pCaja;
@@ -591,6 +676,7 @@ export default function App() {
         if (!prod || (Number(row.cajas) || 0) <= 0) return null;
         const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedOrdClient.descuento || 0);
         const precioFinal = (Number(prod.costoCaja) || 0) * (1 - descPct / 100);
+        const costoAdq = Number(prod.costoAdquisicion) || 0;
         return {
           prodId: prod.id,
           sku: prod.sku,
@@ -599,7 +685,9 @@ export default function App() {
           cajas: Number(row.cajas),
           descuentoPct: descPct,
           precioFinal,
-          subtotal: precioFinal * Number(row.cajas)
+          costoAdquisicion: costoAdq,
+          subtotal: precioFinal * Number(row.cajas),
+          utilidadLinea: (precioFinal - costoAdq) * Number(row.cajas)
         };
       })
       .filter(Boolean);
@@ -610,11 +698,13 @@ export default function App() {
       return alert(`Stock insuficiente para ${sinStock.sku}. Disponible: ${sinStock.stockActual} cajas.`);
     }
 
+    const utilidadTotal = validLines.reduce((s, l) => s + (Number(l.utilidadLinea) || 0), 0);
+
     const batch = writeBatch(db);
     const orderRef = doc(collection(db, 'pedidos'));
     batch.set(orderRef, {
       folio: Number(ordFolio),
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: ordFecha || todayStr,
       cliente: selectedOrdClient.nombre,
       direccion: selectedOrdClient.direccion || '',
       recogeBodega: ordRecoge,
@@ -625,6 +715,7 @@ export default function App() {
       envio: Number(ordEnvio) || 0,
       iva: ordIva,
       total: ordTotal,
+      utilidadEstimada: utilidadTotal,
       estatus: 'Confirmado'
     });
 
@@ -637,8 +728,88 @@ export default function App() {
     await batch.commit();
     setOrdItems([{ sku: '', cajas: 1, customDesc: null }]);
     setOrdEnvio(0);
-    alert(`Pedido #${ordFolio} confirmado y stock actualizado.`);
+    alert(`Venta / Pedido #${ordFolio} confirmado y stock actualizado.`);
   };
+
+  // Analítica de Ventas (Pedidos = Ventas) para Dashboard Admin
+  const availableYears = useMemo(() => {
+    const years = new Set([String(new Date().getFullYear())]);
+    orders.forEach((o) => {
+      if (o.fecha) years.add(String(o.fecha).slice(0, 4));
+    });
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [orders]);
+
+  const filteredSales = useMemo(() => {
+    return orders.filter((o) => {
+      const f = String(o.fecha || '');
+      const y = f.slice(0, 4);
+      const m = f.slice(5, 7);
+      if (salesMode === 'anual') {
+        return y === salesYear;
+      }
+      return y === salesYear && m === salesMonth;
+    });
+  }, [orders, salesMode, salesYear, salesMonth]);
+
+  const distributorSummary = useMemo(() => {
+    const map = {};
+    filteredSales.forEach((o) => {
+      const key = o.cliente || 'Sin Cliente';
+      if (!map[key]) {
+        map[key] = { cliente: key, ordenes: 0, cajas: 0, subtotal: 0, total: 0, utilidad: 0 };
+      }
+      const cajasOrden = Array.isArray(o.partidas) ? o.partidas.reduce((s, p) => s + (Number(p.cajas) || 0), 0) : 0;
+      const utilOrden = Array.isArray(o.partidas)
+        ? o.partidas.reduce((s, p) => s + ((Number(p.precioFinal) - (Number(p.costoAdquisicion) || 0)) * (Number(p.cajas) || 0)), 0)
+        : (Number(o.utilidadEstimada) || 0);
+      map[key].ordenes += 1;
+      map[key].cajas += cajasOrden;
+      map[key].subtotal += Number(o.subtotal) || 0;
+      map[key].total += Number(o.total) || 0;
+      map[key].utilidad += utilOrden;
+    });
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [filteredSales]);
+
+  const sellerSummary = useMemo(() => {
+    const map = {};
+    filteredSales.forEach((o) => {
+      const key = o.ejecutivo || 'Sin Ejecutivo';
+      if (!map[key]) {
+        map[key] = { vendedor: key, ordenes: 0, cajas: 0, subtotal: 0, total: 0, utilidad: 0 };
+      }
+      const cajasOrden = Array.isArray(o.partidas) ? o.partidas.reduce((s, p) => s + (Number(p.cajas) || 0), 0) : 0;
+      const utilOrden = Array.isArray(o.partidas)
+        ? o.partidas.reduce((s, p) => s + ((Number(p.precioFinal) - (Number(p.costoAdquisicion) || 0)) * (Number(p.cajas) || 0)), 0)
+        : (Number(o.utilidadEstimada) || 0);
+      map[key].ordenes += 1;
+      map[key].cajas += cajasOrden;
+      map[key].subtotal += Number(o.subtotal) || 0;
+      map[key].total += Number(o.total) || 0;
+      map[key].utilidad += utilOrden;
+    });
+    return Object.values(map).sort((a, b) => b.total - a.total);
+  }, [filteredSales]);
+
+  const salesKpis = useMemo(() => {
+    const totalVentas = filteredSales.reduce((s, o) => s + (Number(o.total) || 0), 0);
+    const subtotalVentas = filteredSales.reduce((s, o) => s + (Number(o.subtotal) || 0), 0);
+    const totalCajas = filteredSales.reduce(
+      (s, o) => s + (Array.isArray(o.partidas) ? o.partidas.reduce((c, p) => c + (Number(p.cajas) || 0), 0) : 0),
+      0
+    );
+    const utilidadTotal = filteredSales.reduce(
+      (s, o) =>
+        s +
+        (Array.isArray(o.partidas)
+          ? o.partidas.reduce((u, p) => u + ((Number(p.precioFinal) - (Number(p.costoAdquisicion) || 0)) * (Number(p.cajas) || 0)), 0)
+          : (Number(o.utilidadEstimada) || 0)),
+      0
+    );
+    const margenPct = subtotalVentas > 0 ? (utilidadTotal / subtotalVentas) * 100 : 0;
+    return { totalVentas, subtotalVentas, totalCajas, utilidadTotal, margenPct, numVentas: filteredSales.length };
+  }, [filteredSales]);
 
   if (authLoading) {
     return (
@@ -682,6 +853,8 @@ export default function App() {
   const availableTabs = isAdmin
     ? [
         { id: 'inventario', label: 'Inventario', icon: Package },
+        { id: 'margenes', label: 'Costos y Márgenes', icon: TrendingUp },
+        { id: 'dashboard', label: 'Dashboard Ventas', icon: BarChart3 },
         { id: 'cotizador', label: 'Cotizador', icon: FileText },
         { id: 'clientes', label: 'Distribuidores', icon: Users },
         { id: 'ejecutivos', label: 'Ejecutivos y Firmas', icon: UserCheck },
@@ -717,14 +890,14 @@ export default function App() {
               <p className="text-xs text-white/80">{user.email}</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {availableTabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium transition ${
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition ${
                     activeTab === tab.id ? 'bg-white text-black font-bold shadow' : 'bg-black/20 text-white hover:bg-black/30'
                   }`}
                 >
@@ -748,7 +921,7 @@ export default function App() {
           <div className="mb-6 bg-amber-50 border border-amber-300 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4 no-print">
             <div>
               <h2 className="font-semibold text-black">Base de datos lista para inicializarse</h2>
-              <p className="text-sm text-gray-700">Carga automáticamente tus 39 SKUs, distribuidores y las 5 firmas digitales.</p>
+              <p className="text-sm text-gray-700">Carga automáticamente tus 129 SKUs, distribuidores y las 5 firmas digitales[cite: 1].</p>
             </div>
             <button
               onClick={seedDatabase}
@@ -762,7 +935,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 1: INVENTARIO */}
+        {/* TAB 1: INVENTARIO (Títulos de tu CSV + Precio por Paq antes de Costo por Caja) */}
         {activeTab === 'inventario' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3">
@@ -802,7 +975,7 @@ export default function App() {
                 {isAdmin && (
                   <div className="flex flex-wrap gap-2">
                     <label
-                      title="Encabezados CSV: sku,descripcion,stock,costoCaja,uPq,pCaja"
+                      title="Importa CSV con tus títulos: SKU, Descripción, STOCK, Precio por Paq, Costo por Caja, Costo Unidad, U/PQ, P/CAJA..."
                       className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium cursor-pointer"
                     >
                       <Upload className="w-3.5 h-3.5" /> Importar CSV
@@ -812,13 +985,19 @@ export default function App() {
                       onClick={() =>
                         exportToCSV(
                           'inventario_la_pajarita.csv',
-                          inventory.map(({ sku, descripcion, stock, costoCaja, uPq, pCaja }) => ({
-                            sku,
-                            descripcion,
-                            stock,
-                            costoCaja,
-                            uPq,
-                            pCaja
+                          inventory.map((p) => ({
+                            SKU: p.sku,
+                            Descripción: p.descripcion,
+                            STOCK: p.stock,
+                            'Precio por Paq': p.precioPaq,
+                            'Costo por Caja': p.costoCaja,
+                            'Costo Unidad': p.costoUnidad,
+                            'U/PQ': p.uPq,
+                            'P/CAJA': p.pCaja,
+                            'Total de Prod en Caja': p.totalProdCaja,
+                            'C/PALET': p.cPalet,
+                            Volumen: p.volumen,
+                            Peso: p.peso
                           }))
                         )
                       }
@@ -839,48 +1018,58 @@ export default function App() {
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-xs">
+              <table className="w-full text-xs text-left whitespace-nowrap">
+                <thead style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[11px]">
                   <tr>
-                    <th className="px-4 py-3">SKU</th>
-                    <th className="px-4 py-3">Descripción</th>
-                    <th className="px-4 py-3 text-center">Tamaño / Material</th>
-                    <th className="px-4 py-3 text-center">Stock Cajas</th>
-                    <th className="px-4 py-3 text-right">Precio Caja</th>
-                    <th className="px-4 py-3 text-right">Precio Paquete</th>
-                    <th className="px-4 py-3 text-center">U/PQ • P/CAJA</th>
-                    {isAdmin && <th className="px-4 py-3 text-right">Valor Stock</th>}
+                    <th className="px-3 py-3">SKU</th>
+                    <th className="px-3 py-3">Descripción</th>
+                    <th className="px-3 py-3 text-center">STOCK</th>
+                    <th className="px-3 py-3 text-right">Precio por Paq</th>
+                    <th className="px-3 py-3 text-right">Costo por Caja</th>
+                    <th className="px-3 py-3 text-right">Costo Unidad</th>
+                    <th className="px-3 py-3 text-center">U/PQ</th>
+                    <th className="px-3 py-3 text-center">P/CAJA</th>
+                    <th className="px-3 py-3 text-center">Total de Prod en Caja</th>
+                    <th className="px-3 py-3 text-center">C/PALET</th>
+                    <th className="px-3 py-3 text-right">Volumen</th>
+                    <th className="px-3 py-3 text-right">Peso</th>
+                    {isAdmin && <th className="px-3 py-3 text-right">Valor Stock</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white text-black">
                   {filteredInventory.map((item) => {
-                    const precioPaq = item.pCaja > 0 ? item.costoCaja / item.pCaja : item.costoCaja;
+                    const pPaq = Number(item.precioPaq) > 0
+                      ? Number(item.precioPaq)
+                      : (Number(item.pCaja) > 0 ? Number(item.costoCaja) / Number(item.pCaja) : Number(item.costoCaja) || 0);
                     return (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 font-mono font-bold text-black">{item.sku}</td>
-                        <td className="px-4 py-3 text-xs text-black">{item.descripcion}</td>
-                        <td className="px-4 py-3 text-center text-xs text-black">
-                          {extractSize(item.sku, item.descripcion)} • {extractMaterial(item.sku, item.descripcion)}
-                        </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2.5 font-mono font-bold text-black">{item.sku}</td>
+                        <td className="px-3 py-2.5 text-[11px] text-black max-w-xs truncate" title={item.descripcion}>{item.descripcion}</td>
+                        <td className="px-3 py-2.5">
                           {isAdmin ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <button onClick={() => adjustStock(item, -1)} className="px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-100">-</button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button onClick={() => adjustStock(item, -1)} className="px-1.5 py-0.5 border border-gray-300 rounded hover:bg-gray-100">-</button>
                               <span className={`font-bold min-w-[2rem] text-center ${item.stock <= 5 ? 'text-red-600' : 'text-black'}`}>
                                 {item.stock}
                               </span>
-                              <button onClick={() => adjustStock(item, 1)} className="px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-100">+</button>
+                              <button onClick={() => adjustStock(item, 1)} className="px-1.5 py-0.5 border border-gray-300 rounded hover:bg-gray-100">+</button>
                             </div>
                           ) : (
-                            <div className="text-center font-bold text-black">{item.stock} cajas</div>
+                            <div className="text-center font-bold text-black">{item.stock}</div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right font-medium text-black">{formatCurrency(item.costoCaja)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-black">{formatCurrency(precioPaq)}</td>
-                        <td className="px-4 py-3 text-center text-xs text-black">{item.uPq} uds • {item.pCaja} paq</td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-black">{formatCurrency(pPaq)}</td>
+                        <td className="px-3 py-2.5 text-right font-medium text-black">{formatCurrency(item.costoCaja)}</td>
+                        <td className="px-3 py-2.5 text-right text-black">{formatCurrency(item.costoUnidad, 4)}</td>
+                        <td className="px-3 py-2.5 text-center text-black">{item.uPq || 0}</td>
+                        <td className="px-3 py-2.5 text-center text-black">{item.pCaja || 0}</td>
+                        <td className="px-3 py-2.5 text-center text-black">{(Number(item.totalProdCaja) || 0).toLocaleString('es-MX')}</td>
+                        <td className="px-3 py-2.5 text-center text-black">{item.cPalet || 0}</td>
+                        <td className="px-3 py-2.5 text-right text-black">{item.volumen || 0}</td>
+                        <td className="px-3 py-2.5 text-right text-black">{item.peso || 0}</td>
                         {isAdmin && (
-                          <td className="px-4 py-3 text-right font-bold text-black">
-                            {formatCurrency(item.stock * item.costoCaja)}
+                          <td className="px-3 py-2.5 text-right font-bold text-black">
+                            {formatCurrency((Number(item.stock) || 0) * (Number(item.costoCaja) || 0))}
                           </td>
                         )}
                       </tr>
@@ -892,7 +1081,440 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: COTIZADOR */}
+        {/* TAB 2: COSTOS Y MÁRGENES (Solo Admin) */}
+        {isAdmin && activeTab === 'margenes' && (
+          <div className="space-y-4">
+            <div className="bg-white p-4 rounded-xl border border-gray-200 flex flex-wrap justify-between items-center gap-3">
+              <div>
+                <h2 className="font-bold text-lg text-black flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-[#2B5A45]" /> Control de Costos y Márgenes de Ganancia
+                </h2>
+                <p className="text-xs text-gray-600">
+                  Compara <strong>Precio de Adquisición</strong> vs. <strong>Precio de Venta</strong> por caja y calcula margen en <strong>$</strong> y <strong>%</strong>.
+                </p>
+              </div>
+              <button
+                onClick={() =>
+                  exportToCSV(
+                    'costos_y_margenes_la_pajarita.csv',
+                    filteredInventory.map((p) => {
+                      const venta = Number(p.costoCaja) || 0;
+                      const adq = Number(p.costoAdquisicion) || 0;
+                      const margenPesos = venta - adq;
+                      const margenPct = venta > 0 ? (margenPesos / venta) * 100 : 0;
+                      return {
+                        SKU: p.sku,
+                        Descripción: p.descripcion,
+                        STOCK: p.stock,
+                        'Precio Adquisición ($)': adq.toFixed(2),
+                        'Precio Venta Caja ($)': venta.toFixed(2),
+                        'Margen ($)': margenPesos.toFixed(2),
+                        'Margen (%)': margenPct.toFixed(1) + '%',
+                        'Utilidad Potencial Stock ($)': (margenPesos * (Number(p.stock) || 0)).toFixed(2)
+                      };
+                    })
+                  )
+                }
+                style={{ backgroundColor: '#2B5A45' }}
+                className="flex items-center gap-2 text-white px-3.5 py-2 rounded-lg text-xs font-medium"
+              >
+                <Download className="w-4 h-4" /> Exportar Reporte Márgenes (CSV)
+              </button>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[11px]">
+                  <tr>
+                    <th className="px-3 py-3">SKU</th>
+                    <th className="px-3 py-3">Descripción</th>
+                    <th className="px-3 py-3 text-center">STOCK</th>
+                    <th className="px-3 py-3 text-right">Precio Adquisición</th>
+                    <th className="px-3 py-3 text-right">Precio Venta (Caja)</th>
+                    <th className="px-3 py-3 text-right">Margen ($)</th>
+                    <th className="px-3 py-3 text-right">Margen (%)</th>
+                    <th className="px-3 py-3 text-right">Utilidad en Stock</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white text-black">
+                  {filteredInventory.map((item) => {
+                    const venta = Number(item.costoCaja) || 0;
+                    const adq = Number(item.costoAdquisicion) || 0;
+                    const margenPesos = venta - adq;
+                    const margenPct = venta > 0 ? (margenPesos / venta) * 100 : 0;
+                    const utilidadStock = margenPesos * (Number(item.stock) || 0);
+                    return (
+                      <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2.5 font-mono font-bold">{item.sku}</td>
+                        <td className="px-3 py-2.5 max-w-xs truncate" title={item.descripcion}>{item.descripcion}</td>
+                        <td className="px-3 py-2.5 text-center font-semibold">{item.stock}</td>
+                        <td className="px-3 py-2.5 text-right">
+                          <input
+                            type="number"
+                            step="0.01"
+                            defaultValue={adq}
+                            onBlur={(e) => handleUpdateAdquisicion(item, e.target.value)}
+                            className="w-24 border border-gray-300 rounded px-2 py-1 text-right bg-white text-black font-medium"
+                          />
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-semibold">{formatCurrency(venta)}</td>
+                        <td className={`px-3 py-2.5 text-right font-bold ${margenPesos < 0 ? 'text-red-600' : 'text-black'}`}>
+                          {formatCurrency(margenPesos)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-bold">
+                          <span className={`px-2 py-0.5 rounded text-[11px] ${margenPct < 20 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-800'}`}>
+                            {margenPct.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-bold">{formatCurrency(utilidadStock)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: DASHBOARD DE VENTAS (Pedidos = Ventas, Mensual/Anual, Distribuidor y Vendedor) */}
+        {isAdmin && activeTab === 'dashboard' && (
+          <div className="space-y-5">
+            <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-4">
+              <div className="flex flex-wrap justify-between items-center gap-3 border-b border-gray-200 pb-3">
+                <div>
+                  <h2 className="font-bold text-lg text-black flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-[#2B5A45]" /> Dashboard de Ventas y Reportes Comerciales
+                  </h2>
+                  <p className="text-xs text-gray-600">
+                    Cada pedido confirmado se registra como venta. Filtra por mes/año o anual general y descarga reportes por distribuidor o vendedor.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() =>
+                      exportToCSV(
+                        salesMode === 'anual'
+                          ? `ventas_anual_general_${salesYear}.csv`
+                          : `ventas_mensual_${salesYear}_${salesMonth}.csv`,
+                        filteredSales.map((o) => ({
+                          Folio: o.folio,
+                          Fecha: o.fecha,
+                          Distribuidor_Cliente: o.cliente,
+                          Vendedor_Ejecutivo: o.ejecutivo,
+                          Cajas: Array.isArray(o.partidas) ? o.partidas.reduce((s, p) => s + (Number(p.cajas) || 0), 0) : 0,
+                          Subtotal: Number(o.subtotal || 0).toFixed(2),
+                          Envio: Number(o.envio || 0).toFixed(2),
+                          IVA: Number(o.iva || 0).toFixed(2),
+                          Total: Number(o.total || 0).toFixed(2)
+                        }))
+                      )
+                    }
+                    style={{ backgroundColor: '#2B5A45' }}
+                    className="flex items-center gap-1.5 text-white px-3.5 py-2 rounded-lg text-xs font-semibold"
+                  >
+                    <Download className="w-4 h-4" />
+                    {salesMode === 'anual' ? `Descargar Anual (${salesYear})` : `Descargar Mes (${salesYear}-${salesMonth})`}
+                  </button>
+                </div>
+              </div>
+
+              {/* Controles de periodo y tipo de reporte */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
+                <div>
+                  <label className="block font-bold mb-1">Periodo</label>
+                  <select
+                    value={salesMode}
+                    onChange={(e) => setSalesMode(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg p-2 bg-white text-black font-semibold"
+                  >
+                    <option value="mensual">Mensual (Mes y Año)</option>
+                    <option value="anual">Anual General</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold mb-1">Año</label>
+                  <select
+                    value={salesYear}
+                    onChange={(e) => setSalesYear(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg p-2 bg-white text-black"
+                  >
+                    {availableYears.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {salesMode === 'mensual' && (
+                  <div>
+                    <label className="block font-bold mb-1">Mes</label>
+                    <select
+                      value={salesMonth}
+                      onChange={(e) => setSalesMonth(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg p-2 bg-white text-black"
+                    >
+                      <option value="01">Enero</option>
+                      <option value="02">Febrero</option>
+                      <option value="03">Marzo</option>
+                      <option value="04">Abril</option>
+                      <option value="05">Mayo</option>
+                      <option value="06">Junio</option>
+                      <option value="07">Julio</option>
+                      <option value="08">Agosto</option>
+                      <option value="09">Septiembre</option>
+                      <option value="10">Octubre</option>
+                      <option value="11">Noviembre</option>
+                      <option value="12">Diciembre</option>
+                    </select>
+                  </div>
+                )}
+
+                <div className={salesMode === 'mensual' ? 'md:col-span-2' : 'md:col-span-3'}>
+                  <label className="block font-bold mb-1">Vista de Reporte</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setReportType('general')}
+                      className={`flex-1 py-2 px-3 rounded-lg border font-semibold ${reportType === 'general' ? 'bg-[#2B5A45] text-white border-[#2B5A45]' : 'bg-white text-black border-gray-300'}`}
+                    >
+                      Ventas Generales
+                    </button>
+                    <button
+                      onClick={() => setReportType('distribuidor')}
+                      className={`flex-1 py-2 px-3 rounded-lg border font-semibold ${reportType === 'distribuidor' ? 'bg-[#2B5A45] text-white border-[#2B5A45]' : 'bg-white text-black border-gray-300'}`}
+                    >
+                      Por Distribuidor
+                    </button>
+                    <button
+                      onClick={() => setReportType('vendedor')}
+                      className={`flex-1 py-2 px-3 rounded-lg border font-semibold ${reportType === 'vendedor' ? 'bg-[#2B5A45] text-white border-[#2B5A45]' : 'bg-white text-black border-gray-300'}`}
+                    >
+                      Por Vendedor
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* KPIs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white p-4 rounded-xl border border-gray-200">
+                <span className="text-xs text-gray-600 block">Ventas Totales (c/IVA)</span>
+                <span className="text-2xl font-bold text-black">{formatCurrency(salesKpis.totalVentas)}</span>
+                <span className="text-[11px] text-gray-500 block mt-1">{salesKpis.numVentas} ventas registradas</span>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-200">
+                <span className="text-xs text-gray-600 block">Cajas Vendidas</span>
+                <span className="text-2xl font-bold text-black">{salesKpis.totalCajas.toLocaleString('es-MX')}</span>
+                <span className="text-[11px] text-gray-500 block mt-1">Subtotal s/IVA: {formatCurrency(salesKpis.subtotalVentas)}</span>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-200">
+                <span className="text-xs text-gray-600 block">Utilidad Estimada ($)</span>
+                <span className="text-2xl font-bold text-[#2B5A45]">{formatCurrency(salesKpis.utilidadTotal)}</span>
+                <span className="text-[11px] text-gray-500 block mt-1">Basado en precio de adquisición</span>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-200">
+                <span className="text-xs text-gray-600 block">Margen Promedio (%)</span>
+                <span className="text-2xl font-bold text-black flex items-center gap-1">
+                  {salesKpis.margenPct.toFixed(1)}% <Percent className="w-4 h-4 text-[#2B5A45]" />
+                </span>
+                <span className="text-[11px] text-gray-500 block mt-1">Periodo: {salesMode === 'anual' ? `Año ${salesYear}` : `${salesYear}-${salesMonth}`}</span>
+              </div>
+            </div>
+
+            {/* Reporte General */}
+            {reportType === 'general' && (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[11px]">
+                    <tr>
+                      <th className="px-4 py-3">Folio</th>
+                      <th className="px-4 py-3">Fecha</th>
+                      <th className="px-4 py-3">Distribuidor / Cliente</th>
+                      <th className="px-4 py-3">Vendedor / Ejecutivo</th>
+                      <th className="px-4 py-3 text-center">Cajas</th>
+                      <th className="px-4 py-3 text-right">Subtotal</th>
+                      <th className="px-4 py-3 text-right">Total Venta</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 bg-white text-black">
+                    {filteredSales.map((o) => {
+                      const cajas = Array.isArray(o.partidas) ? o.partidas.reduce((s, p) => s + (Number(p.cajas) || 0), 0) : 0;
+                      return (
+                        <tr key={o.id}>
+                          <td className="px-4 py-2.5 font-bold">#{o.folio}</td>
+                          <td className="px-4 py-2.5">{o.fecha}</td>
+                          <td className="px-4 py-2.5 font-semibold">{o.cliente}</td>
+                          <td className="px-4 py-2.5">{o.ejecutivo}</td>
+                          <td className="px-4 py-2.5 text-center">{cajas}</td>
+                          <td className="px-4 py-2.5 text-right">{formatCurrency(o.subtotal)}</td>
+                          <td className="px-4 py-2.5 text-right font-bold">{formatCurrency(o.total)}</td>
+                        </tr>
+                      );
+                    })}
+                    {filteredSales.length === 0 && (
+                      <tr>
+                        <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                          No hay ventas registradas para el periodo seleccionado.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Reporte por Distribuidor */}
+            {reportType === 'distribuidor' && (
+              <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+                <div className="flex flex-wrap justify-between items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold">Distribuidor:</span>
+                    <select
+                      value={selectedDistributorReport}
+                      onChange={(e) => setSelectedDistributorReport(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-white text-black"
+                    >
+                      <option value="Todos">Todos los Distribuidores</option>
+                      {distributorSummary.map((d) => (
+                        <option key={d.cliente} value={d.cliente}>{d.cliente}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const rows = selectedDistributorReport === 'Todos'
+                        ? distributorSummary
+                        : distributorSummary.filter((d) => d.cliente === selectedDistributorReport);
+                      exportToCSV(
+                        `reporte_distribuidores_${salesMode}_${salesYear}${salesMode === 'mensual' ? `_${salesMonth}` : ''}.csv`,
+                        rows.map((r) => ({
+                          Distribuidor: r.cliente,
+                          Periodo: salesMode === 'anual' ? salesYear : `${salesYear}-${salesMonth}`,
+                          Ventas: r.ordenes,
+                          Cajas: r.cajas,
+                          Subtotal: r.subtotal.toFixed(2),
+                          Total: r.total.toFixed(2),
+                          Utilidad_Estimada: r.utilidad.toFixed(2)
+                        }))
+                      );
+                    }}
+                    style={{ backgroundColor: '#2B5A45' }}
+                    className="flex items-center gap-1.5 text-white px-3.5 py-2 rounded-lg text-xs font-semibold"
+                  >
+                    <Download className="w-4 h-4" /> Descargar Reporte Distribuidor (CSV)
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[11px]">
+                      <tr>
+                        <th className="px-4 py-3">Distribuidor / Cliente</th>
+                        <th className="px-4 py-3 text-center">Órdenes</th>
+                        <th className="px-4 py-3 text-center">Cajas</th>
+                        <th className="px-4 py-3 text-right">Subtotal</th>
+                        <th className="px-4 py-3 text-right">Total Comprado</th>
+                        <th className="px-4 py-3 text-right">Utilidad Est.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white text-black">
+                      {(selectedDistributorReport === 'Todos'
+                        ? distributorSummary
+                        : distributorSummary.filter((d) => d.cliente === selectedDistributorReport)
+                      ).map((row) => (
+                        <tr key={row.cliente}>
+                          <td className="px-4 py-2.5 font-bold">{row.cliente}</td>
+                          <td className="px-4 py-2.5 text-center">{row.ordenes}</td>
+                          <td className="px-4 py-2.5 text-center">{row.cajas}</td>
+                          <td className="px-4 py-2.5 text-right">{formatCurrency(row.subtotal)}</td>
+                          <td className="px-4 py-2.5 text-right font-bold">{formatCurrency(row.total)}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-[#2B5A45]">{formatCurrency(row.utilidad)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Reporte por Vendedor / Ejecutivo */}
+            {reportType === 'vendedor' && (
+              <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+                <div className="flex flex-wrap justify-between items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold">Vendedor / Ejecutivo:</span>
+                    <select
+                      value={selectedSellerReport}
+                      onChange={(e) => setSelectedSellerReport(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-xs bg-white text-black"
+                    >
+                      <option value="Todos">Todos los Vendedores</option>
+                      {sellerSummary.map((s) => (
+                        <option key={s.vendedor} value={s.vendedor}>{s.vendedor}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const rows = selectedSellerReport === 'Todos'
+                        ? sellerSummary
+                        : sellerSummary.filter((s) => s.vendedor === selectedSellerReport);
+                      exportToCSV(
+                        `reporte_vendedores_${salesMode}_${salesYear}${salesMode === 'mensual' ? `_${salesMonth}` : ''}.csv`,
+                        rows.map((r) => ({
+                          Vendedor: r.vendedor,
+                          Periodo: salesMode === 'anual' ? salesYear : `${salesYear}-${salesMonth}`,
+                          Ventas: r.ordenes,
+                          Cajas: r.cajas,
+                          Subtotal: r.subtotal.toFixed(2),
+                          Total_Vendido: r.total.toFixed(2),
+                          Utilidad_Estimada: r.utilidad.toFixed(2)
+                        }))
+                      );
+                    }}
+                    style={{ backgroundColor: '#2B5A45' }}
+                    className="flex items-center gap-1.5 text-white px-3.5 py-2 rounded-lg text-xs font-semibold"
+                  >
+                    <Download className="w-4 h-4" /> Descargar Reporte Vendedor (CSV)
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead style={{ backgroundColor: '#2B5A45' }} className="text-white uppercase text-[11px]">
+                      <tr>
+                        <th className="px-4 py-3">Vendedor / Ejecutivo</th>
+                        <th className="px-4 py-3 text-center">Ventas</th>
+                        <th className="px-4 py-3 text-center">Cajas</th>
+                        <th className="px-4 py-3 text-right">Subtotal</th>
+                        <th className="px-4 py-3 text-right">Total Vendido</th>
+                        <th className="px-4 py-3 text-right">Utilidad Est.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white text-black">
+                      {(selectedSellerReport === 'Todos'
+                        ? sellerSummary
+                        : sellerSummary.filter((s) => s.vendedor === selectedSellerReport)
+                      ).map((row) => (
+                        <tr key={row.vendedor}>
+                          <td className="px-4 py-2.5 font-bold">{row.vendedor}</td>
+                          <td className="px-4 py-2.5 text-center">{row.ordenes}</td>
+                          <td className="px-4 py-2.5 text-center">{row.cajas}</td>
+                          <td className="px-4 py-2.5 text-right">{formatCurrency(row.subtotal)}</td>
+                          <td className="px-4 py-2.5 text-right font-bold">{formatCurrency(row.total)}</td>
+                          <td className="px-4 py-2.5 text-right font-semibold text-[#2B5A45]">{formatCurrency(row.utilidad)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: COTIZADOR (Con Fecha igual que en Pedido) */}
         {activeTab === 'cotizador' && (
           <div className="space-y-4">
             <div className="no-print bg-white p-4 rounded-xl border border-gray-200 space-y-4">
@@ -970,7 +1592,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* DOCUMENTO DE COTIZACIÓN EN FONDO BLANCO Y TEXTO NEGRO */}
+            {/* DOCUMENTO DE COTIZACIÓN */}
             <div className="bg-white border border-gray-300 max-w-6xl mx-auto p-6 space-y-5 text-black">
               <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-gray-300 pb-4">
                 <div className="shrink-0">
@@ -1044,12 +1666,17 @@ export default function App() {
                       COTIZACIÓN
                     </span>
                     <p className="text-[11px] text-black mt-1">
-                      Folio: <input type="number" value={cotFolio} onChange={(e) => setCotFolio(e.target.value)} className="w-14 text-right font-bold text-black bg-white" />
+                      Folio: <input type="number" value={cotFolio} onChange={(e) => setCotFolio(e.target.value)} className="w-16 text-right font-bold text-black bg-white" />
                     </p>
                   </div>
                   <div className="mt-2">
                     <span className="block text-[10px] font-bold uppercase text-black">FECHA DE COTIZACIÓN</span>
-                    <span className="text-xs font-semibold text-black">{new Date().toLocaleDateString('es-MX')}</span>
+                    <input
+                      type="date"
+                      value={cotFecha}
+                      onChange={(e) => setCotFecha(e.target.value)}
+                      className="text-xs font-semibold text-black bg-white border-b border-gray-300 text-right outline-none"
+                    />
                   </div>
                 </div>
               </div>
@@ -1066,7 +1693,7 @@ export default function App() {
                       <th className="p-2 text-center">Paq x Caja</th>
                       <th className="p-2 text-center">Total Uds</th>
                       <th className="p-2 text-right">Precio Unitario</th>
-                      <th className="p-2 text-right">Precio Caja/Paq</th>
+                      <th className="p-2 text-right">Precio Paq/Caja</th>
                       <th className="p-2 text-center">Impresión</th>
                       <th className="p-2 text-right">Total Importe</th>
                       <th className="p-2 no-print"></th>
@@ -1176,7 +1803,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Cuadro de totales */}
                 <div className="w-full md:w-64 shrink-0 self-end">
                   <table className="w-full text-xs border border-gray-300 bg-white text-black">
                     <tbody className="divide-y divide-gray-300">
@@ -1206,7 +1832,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: DISTRIBUIDORES (Solo Admin) */}
+        {/* TAB 5: DISTRIBUIDORES (Solo Admin) */}
         {isAdmin && activeTab === 'clientes' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -1256,7 +1882,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 4: EJECUTIVOS Y FIRMAS (Solo Admin) */}
+        {/* TAB 6: EJECUTIVOS Y FIRMAS (Solo Admin) */}
         {isAdmin && activeTab === 'ejecutivos' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -1297,7 +1923,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: SOLICITUD DE PEDIDO A BODEGA (Solo Admin) */}
+        {/* TAB 7: SOLICITUD DE PEDIDO A BODEGA (Solo Admin) */}
         {isAdmin && activeTab === 'pedido' && (
           <div className="bg-white p-6 rounded-xl border border-gray-200 max-w-6xl mx-auto space-y-6 text-black">
             <div className="flex flex-wrap justify-between items-center border-b border-gray-300 pb-4 gap-4">
@@ -1310,7 +1936,7 @@ export default function App() {
                 />
                 <div>
                   <h2 className="text-xl font-bold text-black">Solicitud de Pedido a Bodega</h2>
-                  <p className="text-xs text-gray-600">Descuenta automáticamente existencias y aplica descuento del distribuidor</p>
+                  <p className="text-xs text-gray-600">Descuenta automáticamente existencias y registra la venta en el dashboard</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
@@ -1323,6 +1949,14 @@ export default function App() {
                 <div className="text-right">
                   <span className="text-xs text-gray-600 block">Folio Pedido</span>
                   <span className="text-xl font-bold text-black">#{ordFolio}</span>
+                  <div className="mt-1">
+                    <input
+                      type="date"
+                      value={ordFecha}
+                      onChange={(e) => setOrdFecha(e.target.value)}
+                      className="text-xs font-semibold text-black bg-white border border-gray-300 rounded px-2 py-0.5"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1514,7 +2148,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 6: RÉCORD DE PEDIDOS CON OPCIÓN DE ELIMINAR Y DEVOLVER STOCK (Solo Admin) */}
+        {/* TAB 8: RÉCORD DE PEDIDOS (Solo Admin) */}
         {isAdmin && activeTab === 'record' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -1587,25 +2221,33 @@ export default function App() {
       {/* Modales exclusivos de Administrador */}
       {isAdmin && showProdModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleSaveProduct} className="bg-white rounded-xl p-6 max-w-md w-full space-y-4 text-black">
+          <form onSubmit={handleSaveProduct} className="bg-white rounded-xl p-6 max-w-md w-full space-y-3 text-black">
             <h3 className="font-bold text-lg">Agregar / Actualizar SKU</h3>
             <input required placeholder="SKU" value={newProd.sku} onChange={(e) => setNewProd({ ...newProd, sku: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
             <input required placeholder="Descripción" value={newProd.descripcion} onChange={(e) => setNewProd({ ...newProd, descripcion: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs">Stock Inicial (Cajas)</label>
+                <label className="text-xs">STOCK (Cajas)</label>
                 <input type="number" value={newProd.stock} onChange={(e) => setNewProd({ ...newProd, stock: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
               </div>
               <div>
-                <label className="text-xs">Costo Caja Base ($)</label>
+                <label className="text-xs">Precio por Paq ($)</label>
+                <input type="number" step="0.01" value={newProd.precioPaq} onChange={(e) => setNewProd({ ...newProd, precioPaq: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+              </div>
+              <div>
+                <label className="text-xs">Costo por Caja ($)</label>
                 <input type="number" step="0.01" value={newProd.costoCaja} onChange={(e) => setNewProd({ ...newProd, costoCaja: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
               </div>
               <div>
-                <label className="text-xs">Unidades / Paquete</label>
+                <label className="text-xs">Precio Adquisición ($)</label>
+                <input type="number" step="0.01" value={newProd.costoAdquisicion} onChange={(e) => setNewProd({ ...newProd, costoAdquisicion: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+              </div>
+              <div>
+                <label className="text-xs">U/PQ</label>
                 <input type="number" value={newProd.uPq} onChange={(e) => setNewProd({ ...newProd, uPq: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
               </div>
               <div>
-                <label className="text-xs">Paquetes / Caja</label>
+                <label className="text-xs">P/CAJA</label>
                 <input type="number" value={newProd.pCaja} onChange={(e) => setNewProd({ ...newProd, pCaja: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
               </div>
             </div>
