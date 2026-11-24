@@ -175,6 +175,25 @@ const extractMaterial = (sku, desc) => {
   return 'Basic / Otro';
 };
 
+const parseCsvLine = (line) => {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current.trim());
+  return result;
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -323,32 +342,59 @@ export default function App() {
     }
   };
 
+  // Importación segura de CSV por encabezados exactos (sku,descripcion,stock,costoCaja,uPq,pCaja)
   const handleCsvUpload = (e) => {
     if (!isAdmin) return;
     const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = async (evt) => {
-      const text = evt.target.result;
-      const lines = text.split(/\r?\n/).filter(Boolean);
+      const text = String(evt.target.result || '');
+      const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
       if (lines.length < 2) return alert('El archivo CSV está vacío.');
+
+      const rawHeaders = parseCsvLine(lines[0]).map((h) => h.toLowerCase().trim());
+      const idxSku = rawHeaders.indexOf('sku');
+      const idxDesc = rawHeaders.indexOf('descripcion');
+      const idxStock = rawHeaders.indexOf('stock');
+      const idxCosto = rawHeaders.indexOf('costocaja');
+      const idxUPq = rawHeaders.indexOf('upq');
+      const idxPCaja = rawHeaders.indexOf('pcaja');
+
+      if (idxSku === -1 || idxDesc === -1) {
+        return alert(
+          'El CSV debe incluir al menos las columnas: sku, descripcion, stock, costoCaja, uPq, pCaja'
+        );
+      }
+
       const batch = writeBatch(db);
       let count = 0;
+
       for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(',').map((c) => c.replace(/^"|"$/g, '').trim());
-        const sku = cols[0];
-        const descripcion = cols[1];
+        const cols = parseCsvLine(lines[i]);
+        const sku = cols[idxSku] || '';
+        const descripcion = cols[idxDesc] || '';
         if (!sku || !descripcion) continue;
-        const stock = Number(cols[2]) || 0;
-        const costoCaja = Number(cols[6] || cols[3]) || 0;
-        const uPq = Number(cols[7] || cols[4]) || 0;
-        const pCaja = Number(cols[8] || cols[5]) || 0;
-        const safeId = sku.replace(/\//g, '_');
-        batch.set(doc(db, 'inventario', safeId), { sku, descripcion, stock, costoCaja, uPq, pCaja }, { merge: true });
+
+        const existing = inventory.find((p) => p.sku.toLowerCase() === sku.toLowerCase());
+        const stock = idxStock !== -1 && cols[idxStock] !== '' ? Number(cols[idxStock]) || 0 : (existing?.stock ?? 0);
+        const costoCaja = idxCosto !== -1 && cols[idxCosto] !== '' ? Number(cols[idxCosto]) || 0 : (existing?.costoCaja ?? 0);
+        const uPq = idxUPq !== -1 && cols[idxUPq] !== '' ? Number(cols[idxUPq]) || 0 : (existing?.uPq ?? 0);
+        const pCaja = idxPCaja !== -1 && cols[idxPCaja] !== '' ? Number(cols[idxPCaja]) || 0 : (existing?.pCaja ?? 0);
+
+        const safeId = existing?.id || sku.replace(/\//g, '_');
+        batch.set(
+          doc(db, 'inventario', safeId),
+          { sku, descripcion, stock, costoCaja, uPq, pCaja },
+          { merge: true }
+        );
         count++;
       }
+
       await batch.commit();
-      alert(`Se sincronizaron ${count} productos desde tu CSV.`);
+      e.target.value = '';
+      alert(`Se actualizaron ${count} productos sin alterar el resto de tu inventario.`);
     };
     reader.readAsText(file);
   };
@@ -408,6 +454,39 @@ export default function App() {
     await setDoc(doc(db, 'ejecutivos', id), { id, ...newEjec });
     setNewEjec({ nombre: '', firmaUrl: '' });
     setShowEjecModal(false);
+  };
+
+  // Eliminar un pedido del récord y regresar el stock a inventario
+  const handleDeleteOrder = async (order) => {
+    if (!isAdmin) return;
+    const confirmar = window.confirm(
+      `¿Seguro que deseas eliminar el Pedido #${order.folio} de "${order.cliente}"? Se regresarán las cajas al stock del inventario.`
+    );
+    if (!confirmar) return;
+
+    try {
+      const batch = writeBatch(db);
+
+      if (Array.isArray(order.partidas)) {
+        order.partidas.forEach((line) => {
+          const cajasARegresar = Number(line.cajas) || 0;
+          if (cajasARegresar > 0) {
+            const docId = line.prodId || String(line.sku || '').replace(/\//g, '_');
+            if (docId) {
+              batch.update(doc(db, 'inventario', docId), {
+                stock: increment(cajasARegresar)
+              });
+            }
+          }
+        });
+      }
+
+      batch.delete(doc(db, 'pedidos', order.id));
+      await batch.commit();
+      alert(`Pedido #${order.folio} eliminado y stock devuelto al inventario.`);
+    } catch (err) {
+      alert('Error al eliminar el pedido: ' + err.message);
+    }
   };
 
   // Filtrado inteligente compartido (SKU, Tamaño, Material)
@@ -722,12 +801,27 @@ export default function App() {
 
                 {isAdmin && (
                   <div className="flex flex-wrap gap-2">
-                    <label className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium cursor-pointer">
+                    <label
+                      title="Encabezados CSV: sku,descripcion,stock,costoCaja,uPq,pCaja"
+                      className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium cursor-pointer"
+                    >
                       <Upload className="w-3.5 h-3.5" /> Importar CSV
                       <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
                     </label>
                     <button
-                      onClick={() => exportToCSV('inventario_la_pajarita.csv', inventory)}
+                      onClick={() =>
+                        exportToCSV(
+                          'inventario_la_pajarita.csv',
+                          inventory.map(({ sku, descripcion, stock, costoCaja, uPq, pCaja }) => ({
+                            sku,
+                            descripcion,
+                            stock,
+                            costoCaja,
+                            uPq,
+                            pCaja
+                          }))
+                        )
+                      }
                       className="flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-black px-3 py-2 rounded-lg text-xs font-medium"
                     >
                       <Download className="w-3.5 h-3.5" /> CSV
@@ -798,7 +892,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: COTIZADOR (Fondo blanco, texto negro, encabezados #2B5A45, sin foto mesa, solo imagen firma) */}
+        {/* TAB 2: COTIZADOR */}
         {activeTab === 'cotizador' && (
           <div className="space-y-4">
             <div className="no-print bg-white p-4 rounded-xl border border-gray-200 space-y-4">
@@ -878,7 +972,6 @@ export default function App() {
 
             {/* DOCUMENTO DE COTIZACIÓN EN FONDO BLANCO Y TEXTO NEGRO */}
             <div className="bg-white border border-gray-300 max-w-6xl mx-auto p-6 space-y-5 text-black">
-              {/* Cabecera con Logo La Pajarita + Datos del Cliente + Folio y Fecha */}
               <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-gray-300 pb-4">
                 <div className="shrink-0">
                   <img
@@ -961,7 +1054,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Tabla de productos con encabezados en #2B5A45 */}
               <div className="overflow-x-auto">
                 <table className="w-full text-[11px] border-collapse bg-white text-black">
                   <thead>
@@ -1056,25 +1148,22 @@ export default function App() {
                 <Plus className="w-3.5 h-3.5" /> Agregar renglón
               </button>
 
-              {/* Pie de cotización: Notas completas + Únicamente la imagen de la firma digital + Totales */}
               <div className="flex flex-col md:flex-row justify-between items-start gap-6 pt-2">
                 <div className="flex-1 space-y-4">
                   <div>
                     <span className="block text-[10px] font-bold uppercase text-black mb-1">NOTAS:</span>
-                    {/* Editable en pantalla (no-print) */}
                     <textarea
                       rows="10"
                       value={cotNotas}
                       onChange={(e) => setCotNotas(e.target.value)}
                       className="no-print w-full text-[10px] leading-relaxed text-black border border-gray-300 rounded p-2 bg-white"
                     />
-                    {/* Texto completo sin cortes al imprimir PDF */}
                     <div className="hidden print:block text-[10px] leading-relaxed text-black whitespace-pre-line">
                       {cotNotas}
                     </div>
                   </div>
 
-                  {/* Únicamente la imagen de la firma digital (sin texto repetido debajo) */}
+                  {/* Únicamente la imagen de la firma digital */}
                   <div className="pt-2">
                     {ejecutivoActual?.firmaUrl && (
                       <img
@@ -1087,7 +1176,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Cuadro de totales: Subtotal Normal, Descuento, IVA y Total General */}
+                {/* Cuadro de totales */}
                 <div className="w-full md:w-64 shrink-0 self-end">
                   <table className="w-full text-xs border border-gray-300 bg-white text-black">
                     <tbody className="divide-y divide-gray-300">
@@ -1208,7 +1297,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 5: SOLICITUD DE PEDIDO A BODEGA (Con botón Imprimir/PDF y sin texto "Manual") */}
+        {/* TAB 5: SOLICITUD DE PEDIDO A BODEGA (Solo Admin) */}
         {isAdmin && activeTab === 'pedido' && (
           <div className="bg-white p-6 rounded-xl border border-gray-200 max-w-6xl mx-auto space-y-6 text-black">
             <div className="flex flex-wrap justify-between items-center border-b border-gray-300 pb-4 gap-4">
@@ -1238,7 +1327,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Filtros rápidos (ocultos al imprimir) */}
             <div className="no-print flex flex-wrap items-center gap-2 bg-white p-3 rounded-lg border border-gray-200 text-xs">
               <span className="font-semibold text-black">Filtrar SKUs:</span>
               <input
@@ -1426,7 +1514,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 6: RÉCORD DE PEDIDOS (Solo Admin) */}
+        {/* TAB 6: RÉCORD DE PEDIDOS CON OPCIÓN DE ELIMINAR Y DEVOLVER STOCK (Solo Admin) */}
         {isAdmin && activeTab === 'record' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200">
@@ -1458,14 +1546,24 @@ export default function App() {
             <div className="space-y-3">
               {orders.map((ord) => (
                 <div key={ord.id} className="bg-white p-4 rounded-xl border border-gray-200 text-black">
-                  <div className="flex flex-wrap justify-between items-center border-b border-gray-200 pb-2 mb-2">
+                  <div className="flex flex-wrap justify-between items-center border-b border-gray-200 pb-2 mb-2 gap-3">
                     <div>
                       <span className="font-bold mr-3">Pedido #{ord.folio}</span>
                       <span className="font-semibold">{ord.cliente}</span>
                       <span className="text-xs text-gray-600 ml-3">{ord.fecha} • Ejecutivo: {ord.ejecutivo}</span>
                     </div>
-                    <div className="text-right font-bold">
-                      Total: {formatCurrency(ord.total)} <span className="text-xs font-normal text-gray-600">(Envío: {formatCurrency(ord.envio)})</span>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right font-bold">
+                        Total: {formatCurrency(ord.total)}{' '}
+                        <span className="text-xs font-normal text-gray-600">(Envío: {formatCurrency(ord.envio)})</span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteOrder(ord)}
+                        title="Eliminar pedido y regresar stock al inventario"
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 hover:bg-red-100 text-red-700 border border-red-200"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                      </button>
                     </div>
                   </div>
                   <div className="text-xs text-black space-y-1">
