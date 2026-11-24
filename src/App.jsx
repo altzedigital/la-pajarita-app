@@ -65,6 +65,7 @@ const googleProvider = new GoogleAuthProvider();
 const ADMIN_EMAILS = [
   'contacto@la-pajarita.com.mx',
   'eduardo@la-pajarita.com.mx'
+  'mariana@la-pajarita.com.mx'
 ];
 
 const toDirectDriveImg = (url) => {
