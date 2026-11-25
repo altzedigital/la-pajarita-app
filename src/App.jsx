@@ -347,6 +347,7 @@ export default function App() {
   const [selectedHistoryClient, setSelectedHistoryClient] = useState('');
 
   const [editingOrder, setEditingOrder] = useState(null);
+  const [orderToPrint, setOrderToPrint] = useState(null);
   const [editComentarios, setEditComentarios] = useState('');
   const [editFacturado, setEditFacturado] = useState('No');
   const [editNumFactura, setEditNumFactura] = useState('');
@@ -886,6 +887,17 @@ export default function App() {
       alert('Error al eliminar el pedido: ' + err.message);
     }
   };
+
+  useEffect(() => {
+    if (!orderToPrint) return;
+    const timer = setTimeout(() => window.print(), 300);
+    const clearPrintOrder = () => setOrderToPrint(null);
+    window.addEventListener('afterprint', clearPrintOrder);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('afterprint', clearPrintOrder);
+    };
+  }, [orderToPrint]);
 
   const openEditOrderModal = (ord) => {
     setEditingOrder(ord);
@@ -1649,10 +1661,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white text-black">
       <style>{`
+        .print-order-only { display: none; }
         @media print {
           @page { size: landscape; margin: 10mm; }
-          .no-print { display: none !important; }
           body { background: #ffffff !important; color: #000000 !important; }
+          body * { visibility: hidden !important; }
+          .print-order-only, .print-order-only * { visibility: visible !important; }
+          .print-order-only { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
+          .no-print { display: none !important; }
         }
       `}</style>
 
@@ -3738,6 +3754,90 @@ export default function App() {
         )}
       </main>
 
+      {isAdmin && orderToPrint && (
+        <section className="print-order-only bg-white text-black p-2">
+          <div className="flex justify-between items-start border-b-2 border-[#2B5A45] pb-4 mb-4">
+            <div className="flex items-center gap-4">
+              <img
+                src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)}
+                alt="La Pajarita"
+                className="h-16 object-contain"
+                referrerPolicy="no-referrer"
+              />
+              <div>
+                <h1 className="text-2xl font-bold">Solicitud de Pedido</h1>
+                <p className="text-sm text-gray-600">La Pajarita</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-600">Folio de pedido</p>
+              <p className="text-2xl font-bold">#{orderToPrint.folio}</p>
+              <p className="text-sm">Fecha: {orderToPrint.fecha || '—'}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm mb-5">
+            <p><strong>Cliente / Distribuidor:</strong> {orderToPrint.cliente || '—'}</p>
+            <p><strong>Ejecutivo:</strong> {orderToPrint.ejecutivo || '—'}</p>
+            <p className="col-span-2"><strong>Dirección:</strong> {orderToPrint.direccion || '—'}</p>
+            <p><strong>Entrega:</strong> {orderToPrint.recogeBodega === 'SI' ? 'Recoge en bodega' : 'Envío'}</p>
+          </div>
+
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="bg-[#2B5A45] text-white">
+                <th className="border border-gray-400 p-2 text-left">SKU</th>
+                <th className="border border-gray-400 p-2 text-left">DESCRIPCIÓN</th>
+                <th className="border border-gray-400 p-2 text-center">U/PQ</th>
+                <th className="border border-gray-400 p-2 text-center">P/CAJA</th>
+                <th className="border border-gray-400 p-2 text-center">TIPO</th>
+                <th className="border border-gray-400 p-2 text-center">CANTIDAD</th>
+                {orderToPrint.mostrarPrecios !== false && <>
+                  <th className="border border-gray-400 p-2 text-right">PRECIO</th>
+                  <th className="border border-gray-400 p-2 text-center">% DESC.</th>
+                  <th className="border border-gray-400 p-2 text-right">SUBTOTAL</th>
+                </>}
+              </tr>
+            </thead>
+            <tbody>
+              {(orderToPrint.partidas || []).map((line, idx) => {
+                const isPackage = line.tipo === 'paquete';
+                return (
+                  <tr key={`${line.sku || 'line'}-${idx}`}>
+                    <td className="border border-gray-300 p-2 font-semibold">{line.sku || '—'}</td>
+                    <td className="border border-gray-300 p-2">{line.descripcion || '—'}</td>
+                    <td className="border border-gray-300 p-2 text-center">{line.uPq ?? 0}</td>
+                    <td className="border border-gray-300 p-2 text-center">{line.pCaja ?? 0}</td>
+                    <td className="border border-gray-300 p-2 text-center">{isPackage ? 'Paquetes' : 'Cajas'}</td>
+                    <td className="border border-gray-300 p-2 text-center">{isPackage ? (line.paquetes ?? 0) : (line.cajas ?? 0)}</td>
+                    {orderToPrint.mostrarPrecios !== false && <>
+                      <td className="border border-gray-300 p-2 text-right">{formatCurrency(line.precioFinal ?? 0)}</td>
+                      <td className="border border-gray-300 p-2 text-center">{Number(line.descuentoPct) || 0}%</td>
+                      <td className="border border-gray-300 p-2 text-right font-semibold">{formatCurrency(line.subtotal ?? 0)}</td>
+                    </>}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {orderToPrint.comentarios && (
+            <div className="mt-4 border border-gray-300 rounded p-3 text-sm">
+              <strong>Notas:</strong> {orderToPrint.comentarios}
+            </div>
+          )}
+
+          {orderToPrint.mostrarPrecios !== false && (
+            <div className="w-72 ml-auto mt-5 space-y-2 text-sm">
+              <div className="flex justify-between"><span>Subtotal productos:</span><strong>{formatCurrency(orderToPrint.subtotal)}</strong></div>
+              <div className="flex justify-between"><span>Envío:</span><strong>{formatCurrency(orderToPrint.envio)}</strong></div>
+              <div className="flex justify-between"><span>IVA (16%):</span><strong>{formatCurrency(orderToPrint.iva)}</strong></div>
+              <div className="flex justify-between border-t-2 border-gray-700 pt-2 text-base"><strong>Total:</strong><strong>{formatCurrency(orderToPrint.total)}</strong></div>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Modales */}
       {isAdmin && showPastOrderModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -4010,13 +4110,23 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 text-xs border border-gray-300 rounded-lg">
-                Cancelar
+            <div className="flex flex-wrap justify-between gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setOrderToPrint(editingOrder)}
+                style={{ backgroundColor: '#2B5A45' }}
+                className="flex items-center gap-1.5 px-4 py-2 text-xs text-white rounded-lg font-semibold"
+              >
+                <Printer className="w-4 h-4" /> Imprimir pedido
               </button>
-              <button type="submit" style={{ backgroundColor: '#2B5A45' }} className="px-4 py-2 text-xs text-white rounded-lg font-semibold">
-                Guardar Cambios
-              </button>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 text-xs border border-gray-300 rounded-lg">
+                  Cancelar
+                </button>
+                <button type="submit" style={{ backgroundColor: '#2B5A45' }} className="px-4 py-2 text-xs text-white rounded-lg font-semibold">
+                  Guardar Cambios
+                </button>
+              </div>
             </div>
           </form>
         </div>
