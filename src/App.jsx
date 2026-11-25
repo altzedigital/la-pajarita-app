@@ -421,6 +421,7 @@ export default function App() {
   const [ordNotas, setOrdNotas] = useState('');
   const [ordEjecutivo, setOrdEjecutivo] = useState('Ileana Fernández');
   const [ordItems, setOrdItems] = useState([{ sku: '', cajas: 1, customDesc: null }]);
+  const [ordPackageItems, setOrdPackageItems] = useState([]);
 
   const isAdmin = useMemo(() => {
     if (!user?.email) return false;
@@ -1227,14 +1228,22 @@ export default function App() {
   );
 
   const ordSubtotal = useMemo(() => {
-    return ordItems.reduce((acc, row) => {
+    const subtotalCajas = ordItems.reduce((acc, row) => {
       const prod = inventory.find((p) => p.sku === row.sku);
       if (!prod) return acc;
       const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedOrdClient?.descuento || 0);
       const precioFinal = (Number(prod.costoCaja) || 0) * (1 - descPct / 100);
       return acc + precioFinal * (Number(row.cajas) || 0);
     }, 0);
-  }, [ordItems, inventory, selectedOrdClient]);
+    const subtotalPaquetes = ordPackageItems.reduce((acc, row) => {
+      const prod = inventory.find((p) => p.sku === row.sku);
+      if (!prod) return acc;
+      const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedOrdClient?.descuento || 0);
+      const precioPaquete = (Number(prod.precioPaq) || 0) * (1 - descPct / 100);
+      return acc + precioPaquete * (Number(row.paquetes) || 0);
+    }, 0);
+    return subtotalCajas + subtotalPaquetes;
+  }, [ordItems, ordPackageItems, inventory, selectedOrdClient]);
 
   const ordEnvioNum = Number(ordEnvio) || 0;
   const ordIva = ordShowPrices ? (ordSubtotal + ordEnvioNum) * 0.16 : 0;
@@ -1243,7 +1252,7 @@ export default function App() {
   const handleConfirmOrder = async () => {
     if (!isAdmin) return;
     if (!selectedOrdClient) return alert('Selecciona un Cliente o Distribuidor.');
-    const validLines = ordItems
+    const validBoxLines = ordItems
       .map((row) => {
         const prod = inventory.find((p) => p.sku === row.sku);
         if (!prod || (Number(row.cajas) || 0) <= 0) return null;
@@ -1251,6 +1260,7 @@ export default function App() {
         const precioFinal = (Number(prod.costoCaja) || 0) * (1 - descPct / 100);
         const costoAdq = Number(prod.costoAdquisicion) || 0;
         return {
+          tipo: 'caja',
           prodId: prod.id,
           sku: prod.sku,
           descripcion: prod.descripcion,
@@ -1269,7 +1279,36 @@ export default function App() {
       })
       .filter(Boolean);
 
-    if (!validLines.length) return alert('Agrega al menos un SKU con cantidad de cajas.');
+    const validPackageLines = ordPackageItems
+      .map((row) => {
+        const prod = inventory.find((p) => p.sku === row.sku);
+        if (!prod || (Number(row.paquetes) || 0) <= 0) return null;
+        const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedOrdClient.descuento || 0);
+        const precioFinal = (Number(prod.precioPaq) || 0) * (1 - descPct / 100);
+        const paquetesPorCaja = Number(prod.pCaja) || 0;
+        const costoAdq = paquetesPorCaja > 0 ? (Number(prod.costoAdquisicion) || 0) / paquetesPorCaja : 0;
+        return {
+          tipo: 'paquete',
+          prodId: prod.id,
+          sku: prod.sku,
+          descripcion: prod.descripcion,
+          uPq: Number(prod.uPq) || 0,
+          pCaja: paquetesPorCaja,
+          precioPaq: Number(prod.precioPaq) || 0,
+          costoCaja: Number(prod.costoCaja) || 0,
+          stockActual: Number(prod.stock) || 0,
+          paquetes: Number(row.paquetes),
+          descuentoPct: descPct,
+          precioFinal,
+          costoAdquisicion: costoAdq,
+          subtotal: precioFinal * Number(row.paquetes),
+          utilidadLinea: (precioFinal - costoAdq) * Number(row.paquetes)
+        };
+      })
+      .filter(Boolean);
+
+    const validLines = [...validBoxLines, ...validPackageLines];
+    if (!validLines.length) return alert('Agrega al menos un SKU con cantidad de cajas o paquetes.');
 
     const utilidadTotal = validLines.reduce((s, l) => s + (Number(l.utilidadLinea) || 0), 0);
 
@@ -1299,14 +1338,22 @@ export default function App() {
       esHistorico: false
     });
 
+    const stockDecrements = {};
     validLines.forEach((line) => {
-      batch.update(doc(db, 'inventario', line.prodId), {
-        stock: increment(-line.cajas)
-      });
+      const decrement = line.tipo === 'paquete'
+        ? (Number(line.pCaja) > 0 ? Number(line.paquetes) / Number(line.pCaja) : 0)
+        : Number(line.cajas) || 0;
+      stockDecrements[line.prodId] = (stockDecrements[line.prodId] || 0) + decrement;
+    });
+    Object.entries(stockDecrements).forEach(([prodId, decrement]) => {
+      if (decrement > 0) {
+        batch.update(doc(db, 'inventario', prodId), { stock: increment(-decrement) });
+      }
     });
 
     await batch.commit();
     setOrdItems([{ sku: '', cajas: 1, customDesc: null }]);
+    setOrdPackageItems([]);
     setOrdEnvio(0);
     setOrdNotas('');
     alert(`Solicitud de Pedido #${ordFolio} confirmada y stock actualizado.`);
@@ -3434,6 +3481,94 @@ export default function App() {
               <Plus className="w-4 h-4" /> Agregar SKU al pedido
             </button>
 
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-black">Paquetes</h3>
+                <button
+                  type="button"
+                  onClick={() => setOrdPackageItems([...ordPackageItems, { sku: '', paquetes: 1, customDesc: null }])}
+                  className="no-print flex items-center gap-1 text-sm text-black font-semibold hover:underline"
+                >
+                  <Plus className="w-4 h-4" /> Agregar paquetes
+                </button>
+              </div>
+
+              <div className="space-y-3 md:hidden">
+                {ordPackageItems.map((row, idx) => {
+                  const prod = inventory.find((p) => p.sku === row.sku);
+                  const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedOrdClient?.descuento || 0);
+                  const precioFinal = prod ? (Number(prod.precioPaq) || 0) * (1 - descPct / 100) : 0;
+                  return (
+                    <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <select value={row.sku} onChange={(e) => { const up = [...ordPackageItems]; up[idx].sku = e.target.value; setOrdPackageItems(up); }} className="flex-1 border border-gray-300 rounded p-1.5 font-mono font-bold bg-white">
+                          <option value="">SKU...</option>
+                          {filteredOrderInventory.map((p) => <option key={p.sku} value={p.sku}>{p.sku}</option>)}
+                        </select>
+                        <button type="button" onClick={() => setOrdPackageItems(ordPackageItems.filter((_, i) => i !== idx))} className="no-print text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                      <p className="text-[11px] text-gray-700">{prod?.descripcion || '-'}</p>
+                      <div className="grid grid-cols-3 gap-2 items-center">
+                        <div>U/PQ: <strong>{prod?.uPq || 0}</strong></div>
+                        <div>P/CAJA: <strong>{prod?.pCaja || 0}</strong></div>
+                        <label className="flex items-center gap-1">Paquetes:
+                          <input type="number" min="1" value={row.paquetes} onChange={(e) => { const up = [...ordPackageItems]; up[idx].paquetes = e.target.value; setOrdPackageItems(up); }} className="w-16 border border-gray-300 rounded p-1 text-center font-bold bg-white" />
+                        </label>
+                      </div>
+                      {ordShowPrices && <div className="space-y-1 pt-1 border-t border-gray-100">
+                        <div className="flex justify-between"><span>Precio por paquete:</span><strong>{formatCurrency(prod?.precioPaq || 0)}</strong></div>
+                        <div className="flex justify-between"><span>Desc: {descPct}% • Precio final por paquete:</span><strong>{formatCurrency(precioFinal)}</strong></div>
+                        <div className="flex justify-between"><span>Subtotal:</span><strong>{formatCurrency(precioFinal * (Number(row.paquetes) || 0))}</strong></div>
+                        <label className="flex items-center justify-between gap-2">Descuento:
+                          <input type="number" min="0" max="100" value={descPct} onChange={(e) => { const up = [...ordPackageItems]; up[idx].customDesc = e.target.value; setOrdPackageItems(up); }} className="w-16 border border-gray-300 rounded p-1 text-center bg-white" />
+                        </label>
+                      </div>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm bg-white text-black">
+                  <thead style={{ backgroundColor: '#2B5A45' }} className="text-white text-xs uppercase">
+                    <tr>
+                      <th className="p-2 text-left">SKU</th>
+                      <th className="p-2 text-left">Descripción</th>
+                      <th className="p-2 text-center">U/PQ</th>
+                      <th className="p-2 text-center">P/CAJA</th>
+                      <th className="p-2 text-center">Paquetes</th>
+                      {ordShowPrices && <th className="p-2 text-right">Precio Paq.</th>}
+                      {ordShowPrices && <th className="p-2 text-center">% Desc</th>}
+                      {ordShowPrices && <th className="p-2 text-right">Precio Final</th>}
+                      {ordShowPrices && <th className="p-2 text-right">Subtotal</th>}
+                      <th className="p-2 no-print"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 border-b border-gray-300">
+                    {ordPackageItems.map((row, idx) => {
+                      const prod = inventory.find((p) => p.sku === row.sku);
+                      const descPct = row.customDesc !== null ? Number(row.customDesc) : Number(selectedOrdClient?.descuento || 0);
+                      const precioFinal = prod ? (Number(prod.precioPaq) || 0) * (1 - descPct / 100) : 0;
+                      return (
+                        <tr key={idx}>
+                          <td className="p-2"><select value={row.sku} onChange={(e) => { const up = [...ordPackageItems]; up[idx].sku = e.target.value; setOrdPackageItems(up); }} className="border border-gray-300 rounded p-1.5 font-mono text-sm w-36 bg-white text-black"><option value="">SKU...</option>{filteredOrderInventory.map((p) => <option key={p.sku} value={p.sku}>{p.sku}</option>)}</select></td>
+                          <td className="p-2 text-xs">{prod?.descripcion || '-'}</td>
+                          <td className="p-2 text-center font-medium">{prod?.uPq || 0}</td>
+                          <td className="p-2 text-center font-medium">{prod?.pCaja || 0}</td>
+                          <td className="p-2 text-center"><input type="number" min="1" value={row.paquetes} onChange={(e) => { const up = [...ordPackageItems]; up[idx].paquetes = e.target.value; setOrdPackageItems(up); }} className="border border-gray-300 rounded p-1 w-20 text-center font-semibold bg-white text-black" /></td>
+                          {ordShowPrices && <td className="p-2 text-right">{formatCurrency(prod?.precioPaq || 0)}</td>}
+                          {ordShowPrices && <td className="p-2 text-center"><input type="number" min="0" max="100" value={descPct} onChange={(e) => { const up = [...ordPackageItems]; up[idx].customDesc = e.target.value; setOrdPackageItems(up); }} className="border border-gray-300 rounded p-1 w-16 text-center bg-white text-black" /></td>}
+                          {ordShowPrices && <td className="p-2 text-right">{formatCurrency(precioFinal)}</td>}
+                          {ordShowPrices && <td className="p-2 text-right font-bold">{formatCurrency(precioFinal * (Number(row.paquetes) || 0))}</td>}
+                          <td className="p-2 text-center no-print"><button type="button" onClick={() => setOrdPackageItems(ordPackageItems.filter((_, i) => i !== idx))} className="text-red-600"><Trash2 className="w-4 h-4" /></button></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div className="space-y-1">
               <label className="block text-xs font-bold uppercase text-black">Notas de la Solicitud de Pedido</label>
               <textarea
@@ -3574,7 +3709,7 @@ export default function App() {
                   <div className="text-xs text-black space-y-1">
                     {ord.partidas?.map((p, idx) => (
                       <div key={idx} className="flex justify-between">
-                        <span><strong>{p.sku}</strong> — {p.descripcion} ({p.cajas} cajas, {p.descuentoPct}% desc)</span>
+                        <span><strong>{p.sku}</strong> — {p.descripcion} ({p.tipo === 'paquete' ? `${p.paquetes} paquetes` : `${p.cajas} cajas`}, {p.descuentoPct}% desc)</span>
                         <span>{formatCurrency(p.subtotal)}</span>
                       </div>
                     ))}
