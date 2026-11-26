@@ -1226,7 +1226,6 @@ export default function App() {
   const calcLineCotizacion = (prod, unidadVenta, cantidad, rowImpresion) => {
     const impMode = rowImpresion || cotImpresion;
     const impMeta = MODALIDADES_IMPRESION.find((m) => m.id === impMode) || MODALIDADES_IMPRESION[0];
-
     if (!prod) {
       return {
         precioNormalUnidad: 0,
@@ -1239,69 +1238,51 @@ export default function App() {
     }
 
     const costoCajaBase = Number(prod.costoCaja) || 0;
-    const precioPaqBase = Number(prod.precioPaq) || 0;
+    const pCaja = Number(prod.pCaja) || 1;
     const uPq = Number(prod.uPq) || 0;
-    const pCaja = Number(prod.pCaja) || 0;
-    const totalProdCaja = Number(prod.totalProdCaja) || 0;
+    const precioPaqBase = Number(prod.precioPaq) > 0
+      ? Number(prod.precioPaq)
+      : (pCaja > 0 ? costoCajaBase / pCaja : costoCajaBase);
 
-    // Total real de servilletas por caja. Usamos totalProdCaja cuando existe;
-    // si no está capturado, calculamos paquetes por caja × servilletas por paquete.
-    const unidadesCaja = totalProdCaja > 0
-      ? totalProdCaja
-      : uPq * pCaja;
+    const baseSeleccionada = unidadVenta === 'paquete' ? precioPaqBase : costoCajaBase;
+    const totalUds = unidadVenta === 'paquete'
+      ? uPq * cantidad
+      : uPq * pCaja * cantidad;
 
-    // Precio base por servilleta individual, tanto para venta por paquete
-    // como por caja. Así la impresión siempre se calcula por servilleta.
-    let precioBasePieza = 0;
+    // La impresión se calcula por servilleta individual, no por paquete ni por caja.
+    const unidadesPorSeleccion = cantidad > 0 ? totalUds / cantidad : 0;
+    const precioBasePieza = unidadesPorSeleccion > 0
+      ? baseSeleccionada / unidadesPorSeleccion
+      : 0;
 
-    if (unidadVenta === 'paquete') {
-      const precioPaquete = precioPaqBase > 0
-        ? precioPaqBase
-        : (pCaja > 0 ? costoCajaBase / pCaja : 0);
-
-      precioBasePieza = uPq > 0 ? precioPaquete / uPq : 0;
-    } else {
-      precioBasePieza = unidadesCaja > 0
-        ? costoCajaBase / unidadesCaja
-        : 0;
-    }
-
-    // Total de servilletas de acuerdo con la presentación y cantidad elegidas.
-    const unidadesPorSeleccion = unidadVenta === 'paquete'
-      ? uPq
-      : unidadesCaja;
-    const totalUds = unidadesPorSeleccion * (Number(cantidad) || 0);
-
-    // Cargo de impresión aplicado por servilleta individual.
     let precioPiezaConImpresion = precioBasePieza;
     switch (impMode) {
+      // Modalidades porcentuales: se multiplica el precio base por servilleta.
       case '1tinta':
-        precioPiezaConImpresion = precioBasePieza * 1.25;
+        precioPiezaConImpresion = precioBasePieza * 1.25; // +25%
         break;
       case '2tintas':
-        precioPiezaConImpresion = precioBasePieza * 1.30;
+        precioPiezaConImpresion = precioBasePieza * 1.30; // +30%
         break;
+
+      // Modalidades México: se suma una cantidad fija en MXN por servilleta.
       case '1tintamx':
-        precioPiezaConImpresion = precioBasePieza + 0.70;
+        precioPiezaConImpresion = precioBasePieza + 0.70; // +$0.70 MXN
         break;
       case '2tintasmx':
-        precioPiezaConImpresion = precioBasePieza + 1.00;
+        precioPiezaConImpresion = precioBasePieza + 1.00; // +$1.00 MXN
         break;
       default:
         precioPiezaConImpresion = precioBasePieza;
     }
 
     // Se conserva el descuento del cliente/distribuidor, aplicado después de impresión.
-    const descuentoPctCot = Math.min(
-      100,
-      Math.max(0, Number(selectedCotClient?.descuento) || 0)
-    );
+    const descuentoPctCot = Math.min(100, Math.max(0, Number(selectedCotClient?.descuento) || 0));
     const precioUnitarioPieza = precioPiezaConImpresion * (1 - descuentoPctCot / 100);
 
-    // Importe total: precio por servilleta × total de servilletas.
+    // Total Importe = precio por servilleta × total de servilletas.
     const importeNormal = precioUnitarioPieza * totalUds;
-
-    // Precio total de la presentación seleccionada (paquete o caja).
+    // Precio Paq/Caja conserva el precio total de la unidad de venta seleccionada.
     const precioNormalUnidad = precioUnitarioPieza * unidadesPorSeleccion;
 
     return {
