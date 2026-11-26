@@ -1236,43 +1236,54 @@ export default function App() {
         impresionLabel: impMeta.short
       };
     }
+
     const costoCajaBase = Number(prod.costoCaja) || 0;
     const pCaja = Number(prod.pCaja) || 1;
     const uPq = Number(prod.uPq) || 0;
-    const precioPaqBase = Number(prod.precioPaq) > 0 ? Number(prod.precioPaq) : (pCaja > 0 ? costoCajaBase / pCaja : costoCajaBase);
+    const precioPaqBase = Number(prod.precioPaq) > 0
+      ? Number(prod.precioPaq)
+      : (pCaja > 0 ? costoCajaBase / pCaja : costoCajaBase);
 
     const baseSeleccionada = unidadVenta === 'paquete' ? precioPaqBase : costoCajaBase;
-    const paqEnSeleccion = unidadVenta === 'paquete' ? 1 : pCaja;
-    const totalUds = unidadVenta === 'paquete' ? uPq * cantidad : uPq * pCaja * cantidad;
+    const totalUds = unidadVenta === 'paquete'
+      ? uPq * cantidad
+      : uPq * pCaja * cantidad;
 
-    let precioConImpresion = baseSeleccionada;
+    // La impresión se calcula por servilleta individual, no por paquete ni por caja.
+    const unidadesPorSeleccion = cantidad > 0 ? totalUds / cantidad : 0;
+    const precioBasePieza = unidadesPorSeleccion > 0
+      ? baseSeleccionada / unidadesPorSeleccion
+      : 0;
+
+    let precioPiezaConImpresion = precioBasePieza;
     switch (impMode) {
       case '1tinta':
-        precioConImpresion = baseSeleccionada * 1.25;
+        precioPiezaConImpresion = precioBasePieza * 1.25;
         break;
       case '2tintas':
-        precioConImpresion = baseSeleccionada * 1.30;
+        precioPiezaConImpresion = precioBasePieza * 1.30;
         break;
       case '1tintamx':
-        precioConImpresion = baseSeleccionada + 0.70 * paqEnSeleccion;
+        precioPiezaConImpresion = precioBasePieza + 0.70;
         break;
       case '2tintasmx':
-        precioConImpresion = baseSeleccionada + 1.00 * paqEnSeleccion;
+        precioPiezaConImpresion = precioBasePieza + 1.00;
         break;
       default:
-        precioConImpresion = baseSeleccionada;
+        precioPiezaConImpresion = precioBasePieza;
     }
 
-    // El descuento del cliente se aplica una sola vez al precio de cada renglón,
-    // después de calcular la impresión, para conservar la misma matemática total.
+    // Se conserva el descuento del cliente/distribuidor, aplicado después de impresión.
     const descuentoPctCot = Math.min(100, Math.max(0, Number(selectedCotClient?.descuento) || 0));
-    precioConImpresion *= 1 - descuentoPctCot / 100;
+    const precioUnitarioPieza = precioPiezaConImpresion * (1 - descuentoPctCot / 100);
 
-    const importeNormal = precioConImpresion * cantidad;
-    const precioUnitarioPieza = totalUds > 0 ? importeNormal / totalUds : 0;
+    // Total Importe = precio por servilleta × total de servilletas.
+    const importeNormal = precioUnitarioPieza * totalUds;
+    // Precio Paq/Caja conserva el precio total de la unidad de venta seleccionada.
+    const precioNormalUnidad = precioUnitarioPieza * unidadesPorSeleccion;
 
     return {
-      precioNormalUnidad: precioConImpresion,
+      precioNormalUnidad,
       precioUnitarioPieza,
       totalUds,
       importeNormal,
