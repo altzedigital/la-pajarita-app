@@ -234,7 +234,8 @@ const parseNumberClean = (val) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const extractSize = (sku, desc) => {
+const extractSize = (sku, desc, explicit) => {
+  if (String(explicit || '').trim()) return String(explicit).trim();
   const text = `${sku} ${desc}`.toLowerCase();
   for (const t of TAMANOS_FILTER.slice(1)) {
     if (text.includes(t)) return t;
@@ -242,7 +243,8 @@ const extractSize = (sku, desc) => {
   return 'Otro';
 };
 
-const extractMaterial = (sku, desc) => {
+const extractMaterial = (sku, desc, explicit) => {
+  if (String(explicit || '').trim()) return String(explicit).trim();
   const text = `${sku} ${desc}`.toLowerCase();
   if (text.includes('airlaid') || sku.toLowerCase().includes('ak') || sku.toLowerCase().includes('ai') || sku.toLowerCase().includes('ago') || sku.toLowerCase().includes('ane')) return 'Airlaid';
   if (text.includes('novotela')) return 'Novotela';
@@ -253,7 +255,8 @@ const extractMaterial = (sku, desc) => {
   return 'Basic / Otro';
 };
 
-const extractColor = (sku, desc) => {
+const extractColor = (sku, desc, explicit) => {
+  if (String(explicit || '').trim()) return String(explicit).trim();
   const text = `${sku} ${desc}`.toLowerCase();
   if (text.includes('blanco') || text.includes('bca') || sku.toLowerCase().includes('bl')) return 'Blanco';
   if (text.includes('negro') || text.includes('negra') || sku.toLowerCase().includes('ne')) return 'Negro';
@@ -264,7 +267,8 @@ const extractColor = (sku, desc) => {
   return 'Otro';
 };
 
-const extractCollection = (sku, desc) => {
+const extractCollection = (sku, desc, explicit) => {
+  if (String(explicit || '').trim()) return String(explicit).trim();
   const text = `${sku} ${desc}`.toLowerCase();
   const known = [
     { key: 'marais', label: 'Marais' },
@@ -368,10 +372,12 @@ export default function App() {
   const [pastPagado, setPastPagado] = useState('No');
   const [pastNumComplemento, setPastNumComplemento] = useState('');
 
-  const [newProd, setNewProd] = useState({
-    sku: '', descripcion: '', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0,
+  const emptyProduct = {
+    sku: '', descripcion: '', medida: '', material: '', color: '', coleccion: '', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0,
     uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0, fotoUrl: ''
-  });
+  };
+  const [newProd, setNewProd] = useState(emptyProduct);
+  const [editingProductId, setEditingProductId] = useState(null);
   const [showProdModal, setShowProdModal] = useState(false);
 
   const [newClient, setNewClient] = useState({
@@ -504,20 +510,39 @@ export default function App() {
     };
   }, [user, isAdmin]);
 
+  const sizeOptions = useMemo(() => {
+    const set = new Set(['Todos', ...TAMANOS_FILTER.slice(1)]);
+    inventory.forEach((p) => {
+      const value = extractSize(p.sku, p.descripcion, p.medida);
+      if (value && value !== 'Otro' && value !== 'Todos') set.add(value);
+    });
+    set.add('Otro');
+    return Array.from(set);
+  }, [inventory]);
+
+  const materialOptions = useMemo(() => {
+    const set = new Set(['Todos', ...MATERIALES_FILTER.slice(1)]);
+    inventory.forEach((p) => {
+      const value = extractMaterial(p.sku, p.descripcion, p.material);
+      if (value && value !== 'Todos') set.add(value);
+    });
+    return Array.from(set);
+  }, [inventory]);
+
   const colorOptions = useMemo(() => {
     const set = new Set(['Todos']);
     inventory.forEach((p) => {
-      const c = extractColor(p.sku, p.descripcion);
-      if (c && c !== 'Otro') set.add(c);
+      const c = extractColor(p.sku, p.descripcion, p.color);
+      if (c && c !== 'Todos') set.add(c);
     });
-    set.add('Otro');
+    if (!set.has('Otro')) set.add('Otro');
     return Array.from(set);
   }, [inventory]);
 
   const collectionOptions = useMemo(() => {
     const set = new Set(['Todos']);
     inventory.forEach((p) => {
-      const col = extractCollection(p.sku, p.descripcion);
+      const col = extractCollection(p.sku, p.descripcion, p.coleccion);
       if (col) set.add(col);
     });
     return Array.from(set);
@@ -731,16 +756,49 @@ export default function App() {
     });
   };
 
+  const openEditProduct = (item) => {
+    if (!isAdmin) return;
+    setEditingProductId(item.id);
+    setNewProd({
+      ...emptyProduct,
+      ...item,
+      sku: item.sku || '',
+      descripcion: item.descripcion || '',
+      medida: item.medida || '',
+      material: item.material || '',
+      color: item.color || '',
+      coleccion: item.coleccion || '',
+      stock: item.stock ?? 0,
+      precioPaq: item.precioPaq ?? 0,
+      costoCaja: item.costoCaja ?? 0,
+      costoUnidad: item.costoUnidad ?? 0,
+      uPq: item.uPq ?? 0,
+      pCaja: item.pCaja ?? 0,
+      totalProdCaja: item.totalProdCaja ?? 0,
+      cPalet: item.cPalet ?? 0,
+      volumen: item.volumen ?? 0,
+      peso: item.peso ?? 0,
+      costoAdquisicion: item.costoAdquisicion ?? 0,
+      fotoUrl: item.fotoUrl || ''
+    });
+    setShowProdModal(true);
+  };
+
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     if (!isAdmin || !newProd.sku) return;
-    const safeId = newProd.sku.trim().replace(/\//g, '_');
+    const safeId = editingProductId || newProd.sku.trim().replace(/\//g, '_');
     const cCaja = Number(newProd.costoCaja) || 0;
     const pC = Number(newProd.pCaja) || 0;
     const pPaq = Number(newProd.precioPaq) || (cCaja > 0 && pC > 0 ? Number((cCaja / pC).toFixed(2)) : 0);
-    await setDoc(doc(db, 'inventario', safeId), {
+    const productData = {
       ...newProd,
       sku: newProd.sku.trim(),
+      descripcion: String(newProd.descripcion || '').trim(),
+      medida: String(newProd.medida || '').trim(),
+      material: String(newProd.material || '').trim(),
+      color: String(newProd.color || '').trim(),
+      coleccion: String(newProd.coleccion || '').trim(),
       stock: Number(newProd.stock) || 0,
       precioPaq: pPaq,
       costoCaja: cCaja,
@@ -752,11 +810,15 @@ export default function App() {
       volumen: Number(newProd.volumen) || 0,
       peso: Number(newProd.peso) || 0,
       costoAdquisicion: Number(newProd.costoAdquisicion) || 0
-    });
-    setNewProd({
-      sku: '', descripcion: '', stock: 0, precioPaq: 0, costoCaja: 0, costoUnidad: 0,
-      uPq: 0, pCaja: 0, totalProdCaja: 0, cPalet: 0, volumen: 0, peso: 0, costoAdquisicion: 0, fotoUrl: ''
-    });
+    };
+    delete productData.id;
+    if (editingProductId) {
+      await updateDoc(doc(db, 'inventario', editingProductId), productData);
+    } else {
+      await setDoc(doc(db, 'inventario', safeId), productData);
+    }
+    setNewProd(emptyProduct);
+    setEditingProductId(null);
     setShowProdModal(false);
   };
 
@@ -1003,13 +1065,12 @@ export default function App() {
 
   const filteredInventory = useMemo(() => {
     return inventory.filter((p) => {
-      const matchText =
-        p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.descripcion.toLowerCase().includes(searchTerm.toLowerCase());
-      const size = extractSize(p.sku, p.descripcion);
-      const mat = extractMaterial(p.sku, p.descripcion);
-      const col = extractColor(p.sku, p.descripcion);
-      const collectionName = extractCollection(p.sku, p.descripcion);
+      const searchable = `${p.sku || ''} ${p.descripcion || ''} ${p.medida || ''} ${p.material || ''} ${p.color || ''} ${p.coleccion || ''}`.toLowerCase();
+      const matchText = searchable.includes(searchTerm.toLowerCase());
+      const size = extractSize(p.sku, p.descripcion, p.medida);
+      const mat = extractMaterial(p.sku, p.descripcion, p.material);
+      const col = extractColor(p.sku, p.descripcion, p.color);
+      const collectionName = extractCollection(p.sku, p.descripcion, p.coleccion);
 
       const matchSize = filterSize === 'Todos' || size === filterSize;
       const matchMat = filterMaterial === 'Todos' || mat.toLowerCase() === filterMaterial.toLowerCase();
@@ -1025,12 +1086,12 @@ export default function App() {
     return inventory.filter((p) => {
       const sku = String(p.sku || '');
       const descripcion = String(p.descripcion || '');
-      const matchText = sku.toLowerCase().includes(ordSearchTerm.toLowerCase()) ||
-        descripcion.toLowerCase().includes(ordSearchTerm.toLowerCase());
-      const size = extractSize(sku, descripcion);
-      const mat = extractMaterial(sku, descripcion);
-      const col = extractColor(sku, descripcion);
-      const collectionName = extractCollection(sku, descripcion);
+      const searchable = `${sku} ${descripcion} ${p.medida || ''} ${p.material || ''} ${p.color || ''} ${p.coleccion || ''}`.toLowerCase();
+      const matchText = searchable.includes(ordSearchTerm.toLowerCase());
+      const size = extractSize(sku, descripcion, p.medida);
+      const mat = extractMaterial(sku, descripcion, p.material);
+      const col = extractColor(sku, descripcion, p.color);
+      const collectionName = extractCollection(sku, descripcion, p.coleccion);
       const matchSize = ordFilterSize === 'Todos' || size === ordFilterSize;
       const matchMat = ordFilterMaterial === 'Todos' || mat.toLowerCase() === ordFilterMaterial.toLowerCase();
       const matchColor = ordFilterColor === 'Todos' || col.toLowerCase() === ordFilterColor.toLowerCase();
@@ -1184,6 +1245,9 @@ export default function App() {
           descripcion: prod?.descripcion || '',
           unidadVenta: row.unidadVenta,
           cantidad: qty,
+          uPq: Number(prod?.uPq) || 0,
+          pCaja: Number(prod?.pCaja) || 0,
+          totalUds: c.totalUds,
           impresion: c.impresionMode,
           impresionLabel: c.impresionLabel,
           precioUnitarioPieza: c.precioUnitarioPieza,
@@ -1662,12 +1726,15 @@ export default function App() {
     <div className="min-h-screen bg-white text-black">
       <style>{`
         .print-order-only { display: none; }
+        .print-quote-only { display: block; }
         @media print {
           @page { size: landscape; margin: 10mm; }
           body { background: #ffffff !important; color: #000000 !important; }
           body * { visibility: hidden !important; }
           .print-order-only, .print-order-only * { visibility: visible !important; }
           .print-order-only { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
+          .print-quote-only, .print-quote-only * { visibility: visible !important; }
+          .print-quote-only { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: none !important; border: 0 !important; padding: 0 !important; margin: 0 !important; }
           .no-print { display: none !important; }
         }
       `}</style>
@@ -1764,7 +1831,7 @@ export default function App() {
                     onChange={(e) => setFilterSize(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-2 py-2 bg-white text-black"
                   >
-                    {TAMANOS_FILTER.map((t) => <option key={t} value={t}>Medida: {t}</option>)}
+                    {sizeOptions.map((t) => <option key={t} value={t}>Medida: {t}</option>)}
                   </select>
                 </div>
 
@@ -1773,7 +1840,7 @@ export default function App() {
                   onChange={(e) => setFilterMaterial(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-2 py-2 bg-white text-black"
                 >
-                  {MATERIALES_FILTER.map((m) => <option key={m} value={m}>Material: {m}</option>)}
+                  {materialOptions.map((m) => <option key={m} value={m}>Material: {m}</option>)}
                 </select>
 
                 <select
@@ -1806,8 +1873,10 @@ export default function App() {
                         inventory.map((p) => ({
                           SKU: p.sku,
                           Descripción: p.descripcion,
-                          Color: extractColor(p.sku, p.descripcion),
-                          Colección: extractCollection(p.sku, p.descripcion),
+                          Medida: extractSize(p.sku, p.descripcion, p.medida),
+                          Material: extractMaterial(p.sku, p.descripcion, p.material),
+                          Color: extractColor(p.sku, p.descripcion, p.color),
+                          Colección: extractCollection(p.sku, p.descripcion, p.coleccion),
                           STOCK: p.stock,
                           'Precio por Paq': p.precioPaq,
                           'Costo por Caja': p.costoCaja,
@@ -1826,7 +1895,7 @@ export default function App() {
                     <Download className="w-3.5 h-3.5" /> CSV
                   </button>
                   <button
-                    onClick={() => setShowProdModal(true)}
+                    onClick={() => { setEditingProductId(null); setNewProd(emptyProduct); setShowProdModal(true); }}
                     style={{ backgroundColor: '#2B5A45' }}
                     className="flex items-center gap-1.5 text-white px-3 py-2 rounded-lg text-xs font-medium"
                   >
@@ -1845,13 +1914,13 @@ export default function App() {
                   <div key={item.id} className="bg-white border border-gray-200 rounded-xl p-3.5 space-y-2 shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="font-mono font-bold text-sm text-black">{item.sku}</span>
+                        {isAdmin ? <button type="button" onClick={() => openEditProduct(item)} className="font-mono font-bold text-sm text-[#2B5A45] underline underline-offset-2 text-left">{item.sku}</button> : <span className="font-mono font-bold text-sm text-black">{item.sku}</span>}
                         <div className="flex flex-wrap gap-1 mt-1">
                           <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-[#2B5A45] font-semibold">
-                            {extractColor(item.sku, item.descripcion)}
+                            {extractColor(item.sku, item.descripcion, item.color)}
                           </span>
                           <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 text-gray-800 font-semibold">
-                            {extractCollection(item.sku, item.descripcion)}
+                            {extractCollection(item.sku, item.descripcion, item.coleccion)}
                           </span>
                         </div>
                       </div>
@@ -1908,11 +1977,11 @@ export default function App() {
                       : (Number(item.pCaja) > 0 ? Number(item.costoCaja) / Number(item.pCaja) : Number(item.costoCaja) || 0);
                     return (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2.5 font-mono font-bold text-black">{item.sku}</td>
+                        <td className="px-3 py-2.5 font-mono font-bold text-black">{isAdmin ? <button type="button" onClick={() => openEditProduct(item)} className="text-[#2B5A45] underline underline-offset-2">{item.sku}</button> : item.sku}</td>
                         <td className="px-3 py-2.5 text-[11px] text-black max-w-xs truncate" title={item.descripcion}>{item.descripcion}</td>
                         <td className="px-3 py-2.5 text-center text-[10px]">
-                          <span className="font-semibold">{extractColor(item.sku, item.descripcion)}</span> •{' '}
-                          <span>{extractCollection(item.sku, item.descripcion)}</span>
+                          <span className="font-semibold">{extractColor(item.sku, item.descripcion, item.color)}</span> •{' '}
+                          <span>{extractCollection(item.sku, item.descripcion, item.coleccion)}</span>
                         </td>
                         <td className="px-3 py-2.5 text-center">
                           <div className="flex items-center justify-center gap-1.5">
@@ -2548,7 +2617,7 @@ export default function App() {
                           </div>
                         </div>
                         <div className="text-[11px] text-gray-700">
-                          Partidas: {(q.partidas || []).map((p) => `${p.sku} (${p.cantidad} ${p.unidadVenta}, ${p.impresionLabel})`).join(' • ')}
+                          Partidas: {(q.partidas || []).map((p) => `${p.sku} (${p.cantidad} ${p.unidadVenta}; ${p.uPq ?? 0} unidades/paquete; ${p.pCaja ?? 0} paquetes/caja; ${p.totalUds ?? 0} unidades totales; ${p.impresionLabel})`).join(' • ')}
                         </div>
                       </div>
                     ))}
@@ -2637,14 +2706,14 @@ export default function App() {
                           onChange={(e) => setFilterSize(e.target.value)}
                           className="w-1/2 border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
                         >
-                          {TAMANOS_FILTER.map((t) => <option key={t} value={t}>{t}</option>)}
+                          {sizeOptions.map((t) => <option key={t} value={t}>{t}</option>)}
                         </select>
                         <select
                           value={filterMaterial}
                           onChange={(e) => setFilterMaterial(e.target.value)}
                           className="w-1/2 border border-gray-300 rounded-lg p-2 text-xs bg-white text-black"
                         >
-                          {MATERIALES_FILTER.map((m) => <option key={m} value={m}>{m}</option>)}
+                          {materialOptions.map((m) => <option key={m} value={m}>{m}</option>)}
                         </select>
                       </div>
                     </div>
@@ -2671,7 +2740,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-300 max-w-6xl mx-auto p-4 sm:p-6 space-y-5 text-black">
+                <div className="print-quote-only bg-white border border-gray-300 max-w-6xl mx-auto p-4 sm:p-6 space-y-5 text-black">
                   <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-gray-300 pb-4">
                     <div className="shrink-0">
                       <img
@@ -2822,7 +2891,7 @@ export default function App() {
                             </select>
                           </div>
                           <div className="flex justify-between items-center pt-1 border-t border-gray-100 text-[11px]">
-                            <span>U/Pq: <strong>{prod?.uPq || 0}</strong> • P/Caja: <strong>{prod?.pCaja || 0}</strong></span>
+                            <span>Unidades por paquete: <strong>{prod?.uPq || 0}</strong> • Paquetes por caja: <strong>{prod?.pCaja || 0}</strong></span>
                             <span className="font-bold text-sm">{formatCurrency(calc.importeNormal)}</span>
                           </div>
                         </div>
@@ -2839,8 +2908,8 @@ export default function App() {
                           <th className="p-2 text-center">Foto Ref.</th>
                           <th className="p-2 text-center">Presentación</th>
                           <th className="p-2 text-center">Cant.</th>
-                          <th className="p-2 text-center">Uds x Paq</th>
-                          <th className="p-2 text-center">Paq x Caja</th>
+                          <th className="p-2 text-center">Uds./paquete</th>
+                          <th className="p-2 text-center">Paq./caja</th>
                           <th className="p-2 text-center">Total Uds</th>
                           <th className="p-2 text-right">Precio Unitario</th>
                           <th className="p-2 text-right">Precio Paq/Caja</th>
@@ -3330,10 +3399,10 @@ export default function App() {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 <select value={ordFilterSize} onChange={(e) => setOrdFilterSize(e.target.value)} className="w-full border border-gray-300 rounded-lg px-2 py-2 bg-white text-black">
-                  {TAMANOS_FILTER.map((t) => <option key={t} value={t}>Medida: {t}</option>)}
+                  {sizeOptions.map((t) => <option key={t} value={t}>Medida: {t}</option>)}
                 </select>
                 <select value={ordFilterMaterial} onChange={(e) => setOrdFilterMaterial(e.target.value)} className="w-full border border-gray-300 rounded-lg px-2 py-2 bg-white text-black">
-                  {MATERIALES_FILTER.map((m) => <option key={m} value={m}>Material: {m}</option>)}
+                  {materialOptions.map((m) => <option key={m} value={m}>Material: {m}</option>)}
                 </select>
                 <select value={ordFilterColor} onChange={(e) => setOrdFilterColor(e.target.value)} className="w-full border border-gray-300 rounded-lg px-2 py-2 bg-white text-black">
                   {colorOptions.map((c) => <option key={c} value={c}>Color: {c}</option>)}
@@ -3370,8 +3439,8 @@ export default function App() {
                     </div>
                     <p className="text-[11px] text-gray-700">{prod?.descripcion || '-'}</p>
                     <div className="grid grid-cols-3 gap-2 items-center">
-                      <div>U/PQ: <strong>{prod?.uPq || 0}</strong></div>
-                      <div>P/CAJA: <strong>{prod?.pCaja || 0}</strong></div>
+                      <div>Unidades por paquete: <strong>{prod?.uPq || 0}</strong></div>
+                      <div>Paquetes por caja: <strong>{prod?.pCaja || 0}</strong></div>
                       <div className="flex items-center gap-1">
                         <span>Cajas:</span>
                         <input
@@ -3406,8 +3475,8 @@ export default function App() {
                   <tr>
                     <th className="p-2 text-left">SKU</th>
                     <th className="p-2 text-left">Descripción</th>
-                    <th className="p-2 text-center">U/PQ</th>
-                    <th className="p-2 text-center">P/CAJA</th>
+                    <th className="p-2 text-center">Unidades/Paq.</th>
+                    <th className="p-2 text-center">Paq./Caja</th>
                     <th className="p-2 text-center">Cajas</th>
                     {ordShowPrices && <th className="p-2 text-right">Precio Paq.</th>}
                     {ordShowPrices && <th className="p-2 text-right">Costo Caja</th>}
@@ -3525,8 +3594,8 @@ export default function App() {
                       </div>
                       <p className="text-[11px] text-gray-700">{prod?.descripcion || '-'}</p>
                       <div className="grid grid-cols-3 gap-2 items-center">
-                        <div>U/PQ: <strong>{prod?.uPq || 0}</strong></div>
-                        <div>P/CAJA: <strong>{prod?.pCaja || 0}</strong></div>
+                        <div>Unidades por paquete: <strong>{prod?.uPq || 0}</strong></div>
+                        <div>Paquetes por caja: <strong>{prod?.pCaja || 0}</strong></div>
                         <label className="flex items-center gap-1">Paquetes:
                           <input type="number" min="1" value={row.paquetes} onChange={(e) => { const up = [...ordPackageItems]; up[idx].paquetes = e.target.value; setOrdPackageItems(up); }} className="w-16 border border-gray-300 rounded p-1 text-center font-bold bg-white" />
                         </label>
@@ -3550,8 +3619,8 @@ export default function App() {
                     <tr>
                       <th className="p-2 text-left">SKU</th>
                       <th className="p-2 text-left">Descripción</th>
-                      <th className="p-2 text-center">U/PQ</th>
-                      <th className="p-2 text-center">P/CAJA</th>
+                      <th className="p-2 text-center">Unidades/Paq.</th>
+                      <th className="p-2 text-center">Paq./Caja</th>
                       <th className="p-2 text-center">Paquetes</th>
                       {ordShowPrices && <th className="p-2 text-right">Precio Paq.</th>}
                       {ordShowPrices && <th className="p-2 text-center">% Desc</th>}
@@ -4133,11 +4202,17 @@ export default function App() {
       )}
 
       {isAdmin && showProdModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleSaveProduct} className="bg-white rounded-xl p-6 max-w-md w-full space-y-3 text-black">
-            <h3 className="font-bold text-lg">Agregar / Actualizar SKU</h3>
-            <input required placeholder="SKU" value={newProd.sku} onChange={(e) => setNewProd({ ...newProd, sku: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
-            <input required placeholder="Descripción" value={newProd.descripcion} onChange={(e) => setNewProd({ ...newProd, descripcion: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <form onSubmit={handleSaveProduct} className="bg-white rounded-xl p-6 max-w-3xl w-full space-y-3 text-black my-8">
+            <h3 className="font-bold text-lg">{editingProductId ? `Editar SKU ${newProd.sku}` : 'Agregar SKU'}</h3>
+            <input required placeholder="SKU" value={newProd.sku} readOnly={Boolean(editingProductId)} onChange={(e) => setNewProd({ ...newProd, sku: e.target.value })} className={`w-full border border-gray-300 rounded p-2 text-sm ${editingProductId ? 'bg-gray-100 text-gray-600' : 'bg-white'}`} />
+            <input required placeholder="Título / descripción del producto" value={newProd.descripcion} onChange={(e) => setNewProd({ ...newProd, descripcion: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div><label className="text-xs">Medida / tamaño</label><input placeholder="Detectar del SKU/descr. o editar" value={newProd.medida} onChange={(e) => setNewProd({ ...newProd, medida: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" /></div>
+              <div><label className="text-xs">Material</label><input placeholder="Detectar del SKU/descr. o editar" value={newProd.material} onChange={(e) => setNewProd({ ...newProd, material: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" /></div>
+              <div><label className="text-xs">Color</label><input placeholder="Detectar del SKU/descr. o editar" value={newProd.color} onChange={(e) => setNewProd({ ...newProd, color: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" /></div>
+              <div><label className="text-xs">Colección</label><input placeholder="Detectar del SKU/descr. o editar" value={newProd.coleccion} onChange={(e) => setNewProd({ ...newProd, coleccion: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" /></div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs">STOCK</label>
@@ -4163,6 +4238,26 @@ export default function App() {
                 <label className="text-xs">P/CAJA</label>
                 <input type="number" value={newProd.pCaja} onChange={(e) => setNewProd({ ...newProd, pCaja: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
               </div>
+              <div>
+                <label className="text-xs">Costo por unidad</label>
+                <input type="number" step="0.0001" value={newProd.costoUnidad} onChange={(e) => setNewProd({ ...newProd, costoUnidad: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+              </div>
+              <div>
+                <label className="text-xs">Total productos por caja</label>
+                <input type="number" value={newProd.totalProdCaja} onChange={(e) => setNewProd({ ...newProd, totalProdCaja: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+              </div>
+              <div>
+                <label className="text-xs">Cajas por palet</label>
+                <input type="number" value={newProd.cPalet} onChange={(e) => setNewProd({ ...newProd, cPalet: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+              </div>
+              <div>
+                <label className="text-xs">Volumen</label>
+                <input type="number" step="0.0001" value={newProd.volumen} onChange={(e) => setNewProd({ ...newProd, volumen: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+              </div>
+              <div>
+                <label className="text-xs">Peso</label>
+                <input type="number" step="0.01" value={newProd.peso} onChange={(e) => setNewProd({ ...newProd, peso: e.target.value })} className="w-full border border-gray-300 rounded p-2 text-sm bg-white" />
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold">Foto de Referencia (Link o Archivo)</label>
@@ -4185,7 +4280,7 @@ export default function App() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowProdModal(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancelar</button>
+              <button type="button" onClick={() => { setShowProdModal(false); setEditingProductId(null); setNewProd(emptyProduct); }} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">Cancelar</button>
               <button type="submit" style={{ backgroundColor: '#2B5A45' }} className="px-4 py-2 text-sm text-white rounded-lg font-medium">Guardar</button>
             </div>
           </form>
