@@ -351,7 +351,11 @@ export default function App() {
   const [selectedHistoryClient, setSelectedHistoryClient] = useState('');
 
   const [editingOrder, setEditingOrder] = useState(null);
+  const [editOrderPartidas, setEditOrderPartidas] = useState([]);
+  const [orderPreview, setOrderPreview] = useState(null);
   const [orderToPrint, setOrderToPrint] = useState(null);
+  const [quotePreview, setQuotePreview] = useState(null);
+  const [quoteToPrint, setQuoteToPrint] = useState(null);
   const [editComentarios, setEditComentarios] = useState('');
   const [editFacturado, setEditFacturado] = useState('No');
   const [editNumFactura, setEditNumFactura] = useState('');
@@ -952,17 +956,29 @@ export default function App() {
 
   useEffect(() => {
     if (!orderToPrint) return;
+    document.body.classList.add('printing-order');
     const timer = setTimeout(() => window.print(), 300);
     const clearPrintOrder = () => setOrderToPrint(null);
     window.addEventListener('afterprint', clearPrintOrder);
     return () => {
       clearTimeout(timer);
       window.removeEventListener('afterprint', clearPrintOrder);
+      document.body.classList.remove('printing-order');
     };
   }, [orderToPrint]);
 
+  useEffect(() => {
+    if (!quoteToPrint) return;
+    document.body.classList.add('printing-record-quote');
+    const timer = setTimeout(() => window.print(), 300);
+    const clearPrintQuote = () => setQuoteToPrint(null);
+    window.addEventListener('afterprint', clearPrintQuote);
+    return () => { clearTimeout(timer); window.removeEventListener('afterprint', clearPrintQuote); document.body.classList.remove('printing-record-quote'); };
+  }, [quoteToPrint]);
+
   const openEditOrderModal = (ord) => {
     setEditingOrder(ord);
+    setEditOrderPartidas((ord.partidas || []).map((line) => ({ ...line })));
     setEditComentarios(ord.comentarios || '');
     setEditFacturado(ord.facturado || 'No');
     setEditNumFactura(ord.numFactura || '');
@@ -973,14 +989,62 @@ export default function App() {
   const handleSaveOrderDetails = async (e) => {
     e.preventDefault();
     if (!isAdmin || !editingOrder) return;
-    await updateDoc(doc(db, 'pedidos', editingOrder.id), {
-      comentarios: editComentarios,
-      facturado: editFacturado,
-      numFactura: editNumFactura,
-      pagado: editPagado,
-      numComplemento: editNumComplemento
-    });
-    setEditingOrder(null);
+    try {
+      const updatedLines = editOrderPartidas.filter((line) => {
+        const qty = line.tipo === 'paquete' ? Number(line.paquetes) : Number(line.cajas);
+        return qty > 0;
+      }).map((line) => {
+        const qty = line.tipo === 'paquete' ? Number(line.paquetes) : Number(line.cajas);
+        const precio = Number(line.precioFinal) || 0;
+        const costo = Number(line.costoAdquisicion) || 0;
+        return { ...line, ...(line.tipo === 'paquete' ? { paquetes: qty } : { cajas: qty }), subtotal: precio * qty, utilidadLinea: (precio - costo) * qty };
+      });
+      if (!updatedLines.length) return alert('El pedido debe tener al menos un producto.');
+
+      const subtotal = updatedLines.reduce((sum, line) => sum + (Number(line.subtotal) || 0), 0);
+      const envio = Number(editingOrder.envio) || 0;
+      const iva = (subtotal + envio) * 0.16;
+      const total = subtotal + envio + iva;
+      const batch = writeBatch(db);
+
+      // Ajusta únicamente la diferencia de stock entre partidas originales y editadas.
+      if (!editingOrder.esHistorico) {
+        const stockUse = (lines) => lines.reduce((acc, line) => {
+          const id = line.prodId || String(line.sku || '').replace(/\//g, '_');
+          const qty = line.tipo === 'paquete'
+            ? (Number(line.pCaja) > 0 ? (Number(line.paquetes) || 0) / Number(line.pCaja) : 0)
+            : Number(line.cajas) || 0;
+          if (id) acc[id] = (acc[id] || 0) + qty;
+          return acc;
+        }, {});
+        const before = stockUse(editingOrder.partidas || []);
+        const after = stockUse(updatedLines);
+        const ids = new Set([...Object.keys(before), ...Object.keys(after)]);
+        ids.forEach((id) => {
+          const delta = (after[id] || 0) - (before[id] || 0);
+          if (delta !== 0) batch.update(doc(db, 'inventario', id), { stock: increment(-delta) });
+        });
+      }
+
+      batch.update(doc(db, 'pedidos', editingOrder.id), {
+        partidas: updatedLines,
+        subtotal,
+        iva,
+        total,
+        utilidadEstimada: updatedLines.reduce((sum, line) => sum + (Number(line.utilidadLinea) || 0), 0),
+        comentarios: editComentarios,
+        facturado: editFacturado,
+        numFactura: editNumFactura,
+        pagado: editPagado,
+        numComplemento: editNumComplemento,
+        actualizadoEn: new Date().toISOString()
+      });
+      await batch.commit();
+      setEditingOrder(null);
+      alert(`Pedido #${editingOrder.folio} actualizado. El folio se conserva.`);
+    } catch (err) {
+      alert('No se pudo actualizar el pedido: ' + err.message);
+    }
   };
 
   const selectedPastClient = useMemo(
@@ -1254,6 +1318,7 @@ export default function App() {
           uPq: Number(prod?.uPq) || 0,
           pCaja: Number(prod?.pCaja) || 0,
           totalUds: c.totalUds,
+          fotoRef: row.fotoRef || prod?.fotoUrl || '',
           impresion: c.impresionMode,
           impresionLabel: c.impresionLabel,
           precioUnitarioPieza: c.precioUnitarioPieza,
@@ -1732,15 +1797,21 @@ export default function App() {
     <div className="min-h-screen bg-white text-black">
       <style>{`
         .print-order-only { display: none; }
+        .print-record-quote-only { display: none; }
         .print-quote-only { display: block; }
         @media print {
           @page { size: landscape; margin: 10mm; }
           body { background: #ffffff !important; color: #000000 !important; }
           body * { visibility: hidden !important; }
           .print-order-only, .print-order-only * { visibility: visible !important; }
+          .print-record-quote-only, .print-record-quote-only * { visibility: visible !important; }
+          .print-record-quote-only { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
           .print-order-only { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; }
           .print-quote-only, .print-quote-only * { visibility: visible !important; }
           .print-quote-only { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: none !important; border: 0 !important; padding: 0 !important; margin: 0 !important; }
+          body.printing-order .print-quote-only { display: none !important; visibility: hidden !important; }
+          body.printing-record-quote .print-quote-only { display: none !important; visibility: hidden !important; }
+          body.printing-record-quote .print-order-only { display: none !important; visibility: hidden !important; }
           .no-print { display: none !important; }
         }
       `}</style>
@@ -2608,7 +2679,7 @@ export default function App() {
                 ) : (
                   <div className="space-y-2.5">
                     {quotesRecord.map((q) => (
-                      <div key={q.id} className="border border-gray-200 rounded-xl p-3.5 text-xs space-y-1.5">
+                      <div key={q.id} className={`border rounded-xl p-3.5 text-xs space-y-1.5 ${q.esPrueba ? 'border-amber-300 bg-amber-50/40' : 'border-gray-200'}`}>
                         <div className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-100 pb-1.5">
                           <div>
                             <span className="font-bold text-sm">Cotización #{q.folio}</span>
@@ -2622,8 +2693,15 @@ export default function App() {
                             <span className="font-bold text-sm">{formatCurrency(q.total)}</span>
                           </div>
                         </div>
-                        <div className="text-[11px] text-gray-700">
-                          Partidas: {(q.partidas || []).map((p) => `${p.sku} (${p.cantidad} ${p.unidadVenta}; ${p.uPq ?? 0} unidades/paquete; ${p.pCaja ?? 0} paquetes/caja; ${p.totalUds ?? 0} unidades totales; ${p.impresionLabel})`).join(' • ')}
+                        <button type="button" onClick={() => setQuotePreview(q)} className="w-full text-left hover:bg-gray-50 rounded-md p-1 -ml-1">
+                          <div className="text-[11px] text-gray-700">
+                            Partidas: {(q.partidas || []).map((p) => `${p.sku} (${p.cantidad} ${p.unidadVenta}; ${p.uPq ?? 0} unidades/paquete; ${p.pCaja ?? 0} paquetes/caja; ${p.totalUds ?? 0} unidades totales; ${p.impresionLabel})`).join(' • ')}
+                          </div>
+                          <span className="text-[10px] text-[#2B5A45] font-semibold">Haz clic para ver la cotización completa</span>
+                        </button>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <button type="button" onClick={async () => { await updateDoc(doc(db, 'cotizaciones', q.id), { esPrueba: !q.esPrueba, accion: !q.esPrueba ? 'Prueba' : (q.accion === 'Prueba' ? 'Imprimir' : q.accion || 'Guardada') }); }} className="px-2.5 py-1 rounded border border-amber-300 bg-amber-50 text-amber-800 text-[10px] font-semibold">{q.esPrueba ? 'Quitar marca de prueba' : 'Marcar como prueba'}</button>
+                          <button type="button" onClick={async () => { if (window.confirm(`¿Eliminar la cotización #${q.folio}? Esta acción no se puede deshacer.`)) await deleteDoc(doc(db, 'cotizaciones', q.id)); }} className="px-2.5 py-1 rounded border border-red-200 bg-red-50 text-red-700 text-[10px] font-semibold">Eliminar cotización</button>
                         </div>
                       </div>
                     ))}
@@ -3018,12 +3096,13 @@ export default function App() {
                                     up[idx].impresion = e.target.value;
                                     setCotItems(up);
                                   }}
-                                  className="border border-gray-300 rounded p-1 text-[10px] bg-white text-black font-medium"
+                                  className="no-print border border-gray-300 rounded p-1 text-[10px] bg-white text-black font-medium"
                                 >
                                   {MODALIDADES_IMPRESION.map((m) => (
                                     <option key={m.id} value={m.id}>{m.short}</option>
                                   ))}
                                 </select>
+                                <span className="hidden print:inline text-black">{['1tinta','1tintamx'].includes(row.impresion || cotImpresion) ? '1 tinta' : ['2tintas','2tintasmx'].includes(row.impresion || cotImpresion) ? '2 tintas' : 'Sin impresión'}</span>
                               </td>
                               <td className="p-1.5 text-right font-bold text-black">{formatCurrency(calc.importeNormal)}</td>
                               <td className="p-1.5 text-center no-print">
@@ -3720,7 +3799,7 @@ export default function App() {
             <div className="flex flex-wrap justify-between items-center gap-3 bg-white p-4 rounded-xl border border-gray-200">
               <div>
                 <h2 className="font-bold text-lg text-black">Récord Histórico de Órdenes / Ventas</h2>
-                <p className="text-xs text-gray-600">Haz clic sobre cualquier pedido para agregar comentarios o gestionar facturación y pago.</p>
+                <p className="text-xs text-gray-600">Haz clic en un pedido para verlo como se imprime; desde ahí puedes editarlo conservando su folio.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -3765,7 +3844,7 @@ export default function App() {
               {orders.map((ord) => (
                 <div
                   key={ord.id}
-                  onClick={() => openEditOrderModal(ord)}
+                  onClick={() => setOrderPreview(ord)}
                   className="bg-white p-4 rounded-xl border border-gray-200 hover:border-[#2B5A45] cursor-pointer text-black transition"
                 >
                   <div className="flex flex-wrap justify-between items-center border-b border-gray-200 pb-2 mb-2 gap-3">
@@ -3828,6 +3907,15 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {quoteToPrint && (
+        <section className="print-record-quote-only bg-white text-black p-2">
+          <div className="flex justify-between border-b-2 border-[#2B5A45] pb-3 mb-4"><div><img src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)} alt="La Pajarita" className="h-12 object-contain mb-2" referrerPolicy="no-referrer"/><h1 className="text-2xl font-bold">Cotización</h1><p>La Pajarita</p><p className="text-sm">Cliente: {quoteToPrint.cliente}</p><p className="text-sm">Contacto: {quoteToPrint.contacto || '—'} · {quoteToPrint.telefono || '—'}</p><p className="text-sm">Correo: {quoteToPrint.correo || '—'}</p><p className="text-sm">Dirección: {quoteToPrint.direccion || '—'}</p></div><div className="text-right"><strong className="text-2xl">#{quoteToPrint.folio}</strong><p>Fecha: {quoteToPrint.fecha || '—'}</p><p>Ejecutivo: {quoteToPrint.ejecutivo || '—'}</p></div></div>
+          <table className="w-full border-collapse text-xs"><thead><tr className="bg-[#2B5A45] text-white">{['SKU','Producto','Presentación','Cant.','Uds./paq.','Paq./caja','Total uds.','Precio unitario','Precio paq./caja','Impresión','Total importe'].map(h=><th key={h} className="border p-2 text-left">{h}</th>)}</tr></thead><tbody>{(quoteToPrint.partidas || []).map((line,i)=><tr key={i}><td className="border p-2">{line.sku}</td><td className="border p-2">{line.descripcion}</td><td className="border p-2">{line.unidadVenta === 'paquete' ? 'Paquete' : 'Caja'}</td><td className="border p-2">{line.cantidad}</td><td className="border p-2 text-center">{line.uPq ?? 0}</td><td className="border p-2 text-center">{line.pCaja ?? 0}</td><td className="border p-2 text-center">{line.totalUds ?? 0}</td><td className="border p-2">{formatCurrency(line.precioUnitarioPieza || 0)}</td><td className="border p-2">{formatCurrency(line.precioNormalUnidad || 0)}</td><td className="border p-2">{['1tinta','1tintamx'].includes(line.impresion) ? '1 tinta' : ['2tintas','2tintasmx'].includes(line.impresion) ? '2 tintas' : 'Sin impresión'}</td><td className="border p-2">{formatCurrency(line.importeNormal || 0)}</td></tr>)}</tbody></table>
+          {quoteToPrint.notas && <p className="mt-4 text-sm whitespace-pre-line"><strong>Notas:</strong> {quoteToPrint.notas}</p>}
+          <div className="w-72 ml-auto mt-5 space-y-2 text-sm"><div className="flex justify-between"><span>Subtotal:</span><strong>{formatCurrency(quoteToPrint.subtotal || 0)}</strong></div>{quoteToPrint.visibilidad?.envio && <div className="flex justify-between"><span>Envío:</span><strong>{formatCurrency(quoteToPrint.envio || 0)}</strong></div>}{quoteToPrint.visibilidad?.iva && <div className="flex justify-between"><span>IVA (16%):</span><strong>{formatCurrency(quoteToPrint.iva || 0)}</strong></div>}{quoteToPrint.visibilidad?.total && <div className="flex justify-between border-t-2 pt-2 text-base"><strong>Total:</strong><strong>{formatCurrency(quoteToPrint.total || 0)}</strong></div>}</div>
+        </section>
+      )}
 
       {isAdmin && orderToPrint && (
         <section className="print-order-only bg-white text-black p-2">
@@ -4109,6 +4197,34 @@ export default function App() {
         </div>
       )}
 
+      {isAdmin && orderPreview && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl p-5 max-w-5xl w-full space-y-4 text-black shadow-xl my-8">
+            <div className="flex justify-between items-center gap-3"><h3 className="font-bold text-lg">Pedido #{orderPreview.folio} · {orderPreview.cliente}</h3><button type="button" onClick={() => setOrderPreview(null)} className="text-gray-500"><X className="w-5 h-5" /></button></div>
+            <div className="border-b-2 border-[#2B5A45] pb-3 flex justify-between"><div><img src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)} alt="La Pajarita" className="h-12 object-contain mb-2" referrerPolicy="no-referrer"/><h2 className="text-xl font-bold">Solicitud de Pedido</h2><p className="text-sm">La Pajarita</p></div><div className="text-right"><strong className="text-xl">#{orderPreview.folio}</strong><p>Fecha: {orderPreview.fecha || '—'}</p></div></div>
+            <div className="grid grid-cols-2 gap-2 text-sm"><p><strong>Cliente:</strong> {orderPreview.cliente || '—'}</p><p><strong>Ejecutivo:</strong> {orderPreview.ejecutivo || '—'}</p><p className="col-span-2"><strong>Dirección:</strong> {orderPreview.direccion || '—'}</p></div>
+            <div className="overflow-x-auto"><table className="w-full border-collapse text-xs"><thead><tr className="bg-[#2B5A45] text-white">{['SKU','Descripción','Tipo','Cantidad','Precio','Subtotal'].map(h => <th key={h} className="border p-2 text-left">{h}</th>)}</tr></thead><tbody>{(orderPreview.partidas || []).map((line,i)=><tr key={i}><td className="border p-2">{line.sku}</td><td className="border p-2">{line.descripcion}</td><td className="border p-2">{line.tipo === 'paquete' ? 'Paquetes' : 'Cajas'}</td><td className="border p-2">{line.tipo === 'paquete' ? line.paquetes : line.cajas}</td><td className="border p-2">{formatCurrency(line.precioFinal || 0)}</td><td className="border p-2">{formatCurrency(line.subtotal || 0)}</td></tr>)}</tbody></table></div>
+            {orderPreview.comentarios && <p className="text-sm"><strong>Notas:</strong> {orderPreview.comentarios}</p>}
+            {orderPreview.mostrarPrecios !== false && <div className="ml-auto max-w-xs space-y-1 text-sm"><div className="flex justify-between"><span>Subtotal:</span><strong>{formatCurrency(orderPreview.subtotal)}</strong></div><div className="flex justify-between"><span>Envío:</span><strong>{formatCurrency(orderPreview.envio)}</strong></div><div className="flex justify-between"><span>IVA:</span><strong>{formatCurrency(orderPreview.iva)}</strong></div><div className="flex justify-between border-t pt-2 text-base"><strong>Total:</strong><strong>{formatCurrency(orderPreview.total)}</strong></div></div>}
+            <div className="flex justify-end gap-2 no-print"><button type="button" onClick={() => { setOrderToPrint(orderPreview); setOrderPreview(null); }} className="px-4 py-2 rounded-lg text-white text-sm" style={{backgroundColor:'#2B5A45'}}>Imprimir</button><button type="button" onClick={() => { openEditOrderModal(orderPreview); setOrderPreview(null); }} className="px-4 py-2 rounded-lg border text-sm">Editar pedido</button></div>
+          </div>
+        </div>
+      )}
+
+      {quotePreview && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl p-5 max-w-5xl w-full space-y-4 text-black shadow-xl my-8">
+            <div className="flex justify-between items-center gap-3"><h3 className="font-bold text-lg">Cotización #{quotePreview.folio} · {quotePreview.cliente}</h3><button type="button" onClick={() => setQuotePreview(null)} className="text-gray-500"><X className="w-5 h-5" /></button></div>
+            {quotePreview.esPrueba && <p className="text-xs bg-amber-100 text-amber-900 rounded p-2 font-semibold">COTIZACIÓN DE PRUEBA</p>}
+            <div className="border-b border-gray-300 pb-3 flex justify-between gap-4"><div><img src={toDirectDriveImg(LOGO_LA_PAJARITA_URL)} alt="La Pajarita" className="h-12 object-contain mb-2" referrerPolicy="no-referrer"/><h2 className="text-xl font-bold">Cotización</h2><p className="text-sm">La Pajarita</p><p className="text-xs">Cliente: {quotePreview.cliente}</p><p className="text-xs">Contacto: {quotePreview.contacto || '—'} · {quotePreview.telefono || '—'}</p><p className="text-xs">Correo: {quotePreview.correo || '—'}</p><p className="text-xs">Dirección: {quotePreview.direccion || '—'}</p></div><div className="text-right"><strong className="text-xl">#{quotePreview.folio}</strong><p>Fecha: {quotePreview.fecha || '—'}</p><p className="text-xs">Ejecutivo: {quotePreview.ejecutivo || '—'}</p></div></div>
+            <div className="overflow-x-auto"><table className="w-full border-collapse text-xs"><thead><tr className="bg-[#2B5A45] text-white">{['SKU','Producto','Presentación','Cant.','Uds./paq.','Paq./caja','Total uds.','Precio unitario','Precio paq./caja','Impresión','Total importe'].map(h=><th key={h} className="border p-2 text-left">{h}</th>)}</tr></thead><tbody>{(quotePreview.partidas || []).map((line,i)=><tr key={i}><td className="border p-2">{line.sku}</td><td className="border p-2">{line.descripcion}</td><td className="border p-2">{line.unidadVenta === 'paquete' ? 'Paquete' : 'Caja'}</td><td className="border p-2">{line.cantidad}</td><td className="border p-2 text-center">{line.uPq ?? 0}</td><td className="border p-2 text-center">{line.pCaja ?? 0}</td><td className="border p-2 text-center">{line.totalUds ?? 0}</td><td className="border p-2">{formatCurrency(line.precioUnitarioPieza || 0)}</td><td className="border p-2">{formatCurrency(line.precioNormalUnidad || 0)}</td><td className="border p-2">{['1tinta','1tintamx'].includes(line.impresion) ? '1 tinta' : ['2tintas','2tintasmx'].includes(line.impresion) ? '2 tintas' : 'Sin impresión'}</td><td className="border p-2">{formatCurrency(line.importeNormal || 0)}</td></tr>)}</tbody></table></div>
+            {quotePreview.notas && <p className="text-sm whitespace-pre-line"><strong>Notas:</strong> {quotePreview.notas}</p>}
+            <div className="ml-auto max-w-xs space-y-1 text-sm"><div className="flex justify-between"><span>Subtotal:</span><strong>{formatCurrency(quotePreview.subtotal || 0)}</strong></div>{quotePreview.visibilidad?.envio && <div className="flex justify-between"><span>Envío:</span><strong>{formatCurrency(quotePreview.envio || 0)}</strong></div>}{quotePreview.visibilidad?.iva && <div className="flex justify-between"><span>IVA:</span><strong>{formatCurrency(quotePreview.iva || 0)}</strong></div>}{quotePreview.visibilidad?.total && <div className="flex justify-between border-t pt-2 text-base"><strong>Total:</strong><strong>{formatCurrency(quotePreview.total || 0)}</strong></div>}</div>
+            <div className="flex justify-end gap-2 no-print"><button type="button" onClick={() => { setQuoteToPrint(quotePreview); setQuotePreview(null); }} className="px-4 py-2 rounded-lg text-white text-sm" style={{backgroundColor:'#2B5A45'}}>Imprimir cotización</button><button type="button" onClick={() => setQuotePreview(null)} className="px-4 py-2 rounded-lg border text-sm">Cerrar</button></div>
+          </div>
+        </div>
+      )}
+
       {isAdmin && editingOrder && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <form onSubmit={handleSaveOrderDetails} className="bg-white rounded-xl p-6 max-w-lg w-full space-y-4 text-black shadow-xl">
@@ -4120,6 +4236,18 @@ export default function App() {
               <button type="button" onClick={() => setEditingOrder(null)} className="text-gray-500 hover:text-black">
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+              <h4 className="text-xs font-bold uppercase text-[#2B5A45]">Productos del pedido</h4>
+              {editOrderPartidas.map((line, idx) => (
+                <div key={`${line.sku}-${idx}`} className="flex items-center gap-2 border-b border-gray-100 pb-2 text-xs">
+                  <div className="flex-1 min-w-0"><strong>{line.sku}</strong><p className="text-gray-600 truncate">{line.descripcion}</p><span className="text-[10px] text-gray-500">{line.tipo === 'paquete' ? 'Paquetes' : 'Cajas'} · {formatCurrency(line.precioFinal || 0)} c/u</span></div>
+                  <input aria-label={`Cantidad ${line.sku}`} type="number" min="0" step="1" value={line.tipo === 'paquete' ? (line.paquetes ?? 0) : (line.cajas ?? 0)} onChange={(e) => { const next = [...editOrderPartidas]; const key = line.tipo === 'paquete' ? 'paquetes' : 'cajas'; next[idx] = { ...next[idx], [key]: e.target.value }; setEditOrderPartidas(next); }} className="w-20 border border-gray-300 rounded p-1.5 bg-white text-black" />
+                  <button type="button" onClick={() => setEditOrderPartidas(editOrderPartidas.filter((_, i) => i !== idx))} className="text-red-600 p-1" title="Quitar partida"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              ))}
+              <p className="text-[10px] text-gray-500">Puedes cambiar cantidades o quitar partidas. El stock se ajustará por la diferencia al guardar.</p>
             </div>
 
             <div className="space-y-1.5">
