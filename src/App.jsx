@@ -1199,6 +1199,11 @@ export default function App() {
         precioConImpresion = baseSeleccionada;
     }
 
+    // El descuento del cliente se aplica una sola vez al precio de cada renglón,
+    // después de calcular la impresión, para conservar la misma matemática total.
+    const descuentoPctCot = Math.min(100, Math.max(0, Number(selectedCotClient?.descuento) || 0));
+    precioConImpresion *= 1 - descuentoPctCot / 100;
+
     const importeNormal = precioConImpresion * cantidad;
     const precioUnitarioPieza = totalUds > 0 ? importeNormal / totalUds : 0;
 
@@ -1218,11 +1223,12 @@ export default function App() {
       const { importeNormal } = calcLineCotizacion(prod, row.unidadVenta, Number(row.cantidad) || 0, row.impresion);
       return acc + importeNormal;
     }, 0);
-  }, [cotItems, inventory, cotImpresion]);
+  }, [cotItems, inventory, cotImpresion, selectedCotClient]);
 
-  const descuentoPctCot = Number(selectedCotClient.descuento) || 0;
-  const cotDescuentoMonto = cotSubtotalNormal * (descuentoPctCot / 100);
-  const cotSubtotalNeto = cotSubtotalNormal - cotDescuentoMonto;
+  // Los importes por renglón ya incluyen el descuento del cliente.
+  // El subtotal únicamente suma los Total Importe; no vuelve a descontar.
+  const cotDescuentoMonto = 0;
+  const cotSubtotalNeto = cotSubtotalNormal;
   const cotEnvioNum = Number(cotEnvio) || 0;
   const cotBaseMasEnvio = cotSubtotalNeto + cotEnvioNum;
   const cotIva = cotBaseMasEnvio * 0.16;
@@ -1267,8 +1273,8 @@ export default function App() {
       direccion: toUpper(cotDireccionManual),
       ejecutivo: ejecutivoActual?.nombre || '',
       partidas: detailedLines,
-      subtotal: cotSubtotalNormal,
-      descuentoMonto: cotDescuentoMonto,
+      subtotal: cotSubtotalNeto,
+      descuentoMonto: 0,
       envio: cotEnvioNum,
       iva: cotIva,
       total: cotTotalGeneral,
