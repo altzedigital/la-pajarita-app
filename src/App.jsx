@@ -227,11 +227,57 @@ const formatCurrency = (val, decimals = 2) =>
 
 const parseNumberClean = (val) => {
   if (val === undefined || val === null) return 0;
-  const s = String(val).trim();
+  let s = String(val).trim();
   if (!s || s.startsWith('#') || s.toUpperCase().includes('NO HAY')) return 0;
-  const cleaned = s.replace(/[$,]/g, '').trim();
-  const n = Number(cleaned);
+  s = s.replace(/[$\s]/g, '');
+  // Acepta formatos MXN/CSV como 1,078.54 y 1.078,54.
+  if (/^\d{1,3}(\.\d{3})+,\d+$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else s = s.replace(/,/g, '');
+  const n = Number(s);
   return Number.isFinite(n) ? n : 0;
+};
+
+const normalizeImportHeader = (value) => String(value || '')
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const inferPackInfo = (sku, descripcion) => {
+  const text = `${sku || ''} ${descripcion || ''}`.toUpperCase().replace(/,/g, '.');
+  let pCaja = 0;
+  let uPq = 0;
+  // Ejemplos: 20PQ.100H, 20P.40 UND, 48 PQ. PAQ. 50 HJS.
+  const patterns = [
+    /(\d+)\s*(?:PQ|PAQ)\s*\.?\s*(?:PAQ\s*\.?\s*)?(\d+)\s*(?:H(?:JS?)?|HOJAS?|UND(?:S|IDADES)?)/i,
+    /(\d+)\s*P\s*\.?\s*(\d+)\s*(?:H(?:JS?)?|HOJAS?|UND(?:S|IDADES)?)/i
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m) { pCaja = Number(m[1]) || 0; uPq = Number(m[2]) || 0; break; }
+  }
+  return { pCaja, uPq };
+};
+
+const completeProductData = (product) => {
+  const sku = String(product.sku || '').trim();
+  const descripcion = String(product.descripcion || '').trim();
+  const inferred = inferPackInfo(sku, descripcion);
+  const uPq = Number(product.uPq) || inferred.uPq || 0;
+  const pCaja = Number(product.pCaja) || inferred.pCaja || 0;
+  const totalProdCaja = Number(product.totalProdCaja) || (uPq > 0 && pCaja > 0 ? uPq * pCaja : 0);
+  let precioPaq = Number(product.precioPaq) || 0;
+  const costoCaja = Number(product.costoCaja) || (precioPaq > 0 && pCaja > 0 ? Number((precioPaq * pCaja).toFixed(2)) : 0);
+  if (!(precioPaq > 0) && costoCaja > 0 && pCaja > 0) precioPaq = Number((costoCaja / pCaja).toFixed(2));
+  const costoUnidad = Number(product.costoUnidad) || (precioPaq > 0 && uPq > 0 ? Number((precioPaq / uPq).toFixed(4)) : 0);
+  return {
+    ...product,
+    sku,
+    descripcion,
+    medida: product.medida || extractSize(sku, descripcion),
+    material: product.material || extractMaterial(sku, descripcion),
+    color: product.color || extractColor(sku, descripcion),
+    coleccion: product.coleccion || extractCollection(sku, descripcion),
+    uPq, pCaja, totalProdCaja, precioPaq, costoCaja, costoUnidad
+  };
 };
 
 const extractSize = (sku, desc, explicit) => {
@@ -635,97 +681,89 @@ export default function App() {
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
-      const text = String(evt.target.result || '');
-      const lines = text.split(/\r?\n/).filter((l) => l.trim() !== '');
-      if (lines.length < 2) return alert('El archivo CSV está vacío.');
+      try {
+        const csvText = String(evt.target.result || '').replace(/^\uFEFF/, '');
+        const lines = csvText.split(/\r?\n/).filter((l) => l.trim() !== '');
+        if (lines.length < 2) return alert('El archivo CSV está vacío.');
 
-      let headerRowIdx = lines.findIndex((l) => {
-        const cols = parseCsvLine(l).map((c) => c.toLowerCase().trim());
-        return cols.includes('sku');
-      });
-      if (headerRowIdx === -1) headerRowIdx = 0;
-
-      const rawHeaders = parseCsvLine(lines[headerRowIdx]).map((h) => h.toLowerCase().trim());
-      const findCol = (...names) => {
-        for (const n of names) {
-          const i = rawHeaders.indexOf(n.toLowerCase());
-          if (i !== -1) return i;
-        }
-        return -1;
-      };
-
-      const idxSku = findCol('sku');
-      const idxDesc = findCol('descripción', 'descripcion');
-      const idxStock = findCol('stock');
-      const idxPrecioPaq = findCol('precio por paq', 'preciopaq');
-      const idxCostoCaja = findCol('costo por caja', 'costocaja');
-      const idxCostoUnidad = findCol('costo unidad', 'costounidad');
-      const idxUPq = findCol('u/pq', 'upq');
-      const idxPCaja = findCol('p/caja', 'pcaja');
-      const idxTotalProd = findCol('total de prod en caja', 'totalprodcaja');
-      const idxCPalet = findCol('c/palet', 'cpalet');
-      const idxVolumen = findCol('volumen');
-      const idxPeso = findCol('peso');
-      const idxAdq = findCol('costo adquisicion', 'costo adquisición', 'costoadquisicion');
-
-      if (idxSku === -1 || idxDesc === -1) {
-        return alert('El CSV debe incluir al menos las columnas SKU y Descripción.');
-      }
-
-      const batch = writeBatch(db);
-      let count = 0;
-
-      for (let i = headerRowIdx + 1; i < lines.length; i++) {
-        const cols = parseCsvLine(lines[i]);
-        const sku = cols[idxSku] || '';
-        const descripcion = cols[idxDesc] || '';
-        if (!sku || !descripcion || sku.toLowerCase() === 'sku') continue;
-
-        const existing = inventory.find((p) => p.sku.toLowerCase() === sku.toLowerCase());
-        const stock = idxStock !== -1 && cols[idxStock] !== '' ? parseNumberClean(cols[idxStock]) : (existing?.stock ?? 0);
-        const costoCaja = idxCostoCaja !== -1 && cols[idxCostoCaja] !== '' ? parseNumberClean(cols[idxCostoCaja]) : (existing?.costoCaja ?? 0);
-        const pCaja = idxPCaja !== -1 && cols[idxPCaja] !== '' ? parseNumberClean(cols[idxPCaja]) : (existing?.pCaja ?? 0);
-        const precioPaq =
-          idxPrecioPaq !== -1 && cols[idxPrecioPaq] !== '' && !String(cols[idxPrecioPaq]).includes('#') && !String(cols[idxPrecioPaq]).toUpperCase().includes('NO HAY')
-            ? parseNumberClean(cols[idxPrecioPaq])
-            : (pCaja > 0 && costoCaja > 0 ? Number((costoCaja / pCaja).toFixed(2)) : (existing?.precioPaq ?? 0));
-        const costoUnidad = idxCostoUnidad !== -1 && cols[idxCostoUnidad] !== '' ? parseNumberClean(cols[idxCostoUnidad]) : (existing?.costoUnidad ?? 0);
-        const uPq = idxUPq !== -1 && cols[idxUPq] !== '' ? parseNumberClean(cols[idxUPq]) : (existing?.uPq ?? 0);
-        const totalProdCaja = idxTotalProd !== -1 && cols[idxTotalProd] !== '' ? parseNumberClean(cols[idxTotalProd]) : (existing?.totalProdCaja ?? 0);
-        const cPalet = idxCPalet !== -1 && cols[idxCPalet] !== '' ? parseNumberClean(cols[idxCPalet]) : (existing?.cPalet ?? 0);
-        const volumen = idxVolumen !== -1 && cols[idxVolumen] !== '' ? parseNumberClean(cols[idxVolumen]) : (existing?.volumen ?? 0);
-        const peso = idxPeso !== -1 && cols[idxPeso] !== '' ? parseNumberClean(cols[idxPeso]) : (existing?.peso ?? 0);
-        const costoAdquisicion = idxAdq !== -1 && cols[idxAdq] !== '' ? parseNumberClean(cols[idxAdq]) : (existing?.costoAdquisicion ?? Number((costoCaja * 0.7).toFixed(2)));
-
-        const safeId = existing?.id || sku.replace(/\//g, '_');
-        batch.set(
-          doc(db, 'inventario', safeId),
-          {
-            sku,
-            descripcion,
-            stock,
-            precioPaq,
-            costoCaja,
-            costoUnidad,
-            uPq,
-            pCaja,
-            totalProdCaja,
-            cPalet,
-            volumen,
-            peso,
-            costoAdquisicion,
+        // Detecta separador coma o punto y coma, respetando comillas.
+        const firstLine = lines.find((l) => l.trim());
+        const commaCount = (firstLine.match(/,/g) || []).length;
+        const semiCount = (firstLine.match(/;/g) || []).length;
+        const delimiter = semiCount > commaCount ? ';' : ',';
+        const parseRow = (line) => {
+          const result = []; let current = ''; let quoted = false;
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"' && line[i + 1] === '"' && quoted) { current += '"'; i++; }
+            else if (ch === '"') quoted = !quoted;
+            else if (ch === delimiter && !quoted) { result.push(current.trim()); current = ''; }
+            else current += ch;
+          }
+          result.push(current.trim());
+          return result;
+        };
+        const headerRowIdx = lines.findIndex((line) => parseRow(line).some((h) => normalizeImportHeader(h) === 'sku'));
+        if (headerRowIdx < 0) return alert('No encuentro la columna SKU. Revisa que el CSV tenga encabezados.');
+        const headers = parseRow(lines[headerRowIdx]).map(normalizeImportHeader);
+        const findCol = (...aliases) => {
+          const normalized = aliases.map(normalizeImportHeader);
+          return headers.findIndex((h) => normalized.includes(h));
+        };
+        const read = (cols, aliases) => {
+          const idx = findCol(...aliases);
+          return idx >= 0 ? (cols[idx] ?? '').trim() : '';
+        };
+        const numberOrExisting = (cols, aliases, existingValue) => {
+          const raw = read(cols, aliases);
+          return raw !== '' ? parseNumberClean(raw) : (Number(existingValue) || 0);
+        };
+        const rows = [];
+        const problems = [];
+        for (let i = headerRowIdx + 1; i < lines.length; i++) {
+          const cols = parseRow(lines[i]);
+          const sku = read(cols, ['sku', 'codigo', 'codigoproducto', 'referencia']);
+          const descripcion = read(cols, ['descripcion', 'producto', 'nombre', 'titulo', 'articulo']);
+          if (!sku || !descripcion) continue;
+          const existing = inventory.find((p) => String(p.sku || '').toLowerCase() === sku.toLowerCase());
+          const raw = {
+            sku, descripcion,
+            stock: numberOrExisting(cols, ['stock', 'existencia', 'existencias'], existing?.stock),
+            precioPaq: numberOrExisting(cols, ['precioporpaq', 'precioporpq', 'preciopaq', 'preciopaquete', 'precio'], existing?.precioPaq),
+            costoCaja: numberOrExisting(cols, ['costoporcaja', 'costocaja', 'preciocaja', 'ventacaja'], existing?.costoCaja),
+            costoUnidad: numberOrExisting(cols, ['costounidad', 'preciounidad', 'precioporunidad'], existing?.costoUnidad),
+            uPq: numberOrExisting(cols, ['upq', 'unidadesporpaquete', 'unidadespaq', 'unidadesporpaq', 'hjs', 'hojasporpaquete'], existing?.uPq),
+            pCaja: numberOrExisting(cols, ['pcaja', 'paquetesporcaja', 'paqporcaja', 'paquetescaja'], existing?.pCaja),
+            totalProdCaja: numberOrExisting(cols, ['totaldeprodcaja', 'totalprodcaja', 'totalunidadescaja', 'unidadesporcaja'], existing?.totalProdCaja),
+            cPalet: numberOrExisting(cols, ['cpalet', 'cajasporpalet'], existing?.cPalet),
+            volumen: numberOrExisting(cols, ['volumen', 'm3'], existing?.volumen),
+            peso: numberOrExisting(cols, ['peso', 'kg'], existing?.peso),
+            costoAdquisicion: numberOrExisting(cols, ['costoadquisicion', 'precioadquisicion', 'costocompra'], existing?.costoAdquisicion),
             fotoUrl: existing?.fotoUrl || ''
-          },
-          { merge: true }
-        );
-        count++;
+          };
+          const product = completeProductData(raw);
+          if (!product.uPq || !product.pCaja || !product.costoCaja) {
+            problems.push(`${sku}: faltan datos de presentación o costo de caja`);
+          }
+          rows.push({ ...product, id: existing?.id || sku.replace(/\//g, '_') });
+        }
+        if (!rows.length) return alert('No encontré productos válidos. El CSV debe incluir SKU y Descripción/Producto.');
+        const batch = writeBatch(db);
+        rows.forEach((product) => {
+          const { id, ...data } = product;
+          batch.set(doc(db, 'inventario', id), data, { merge: true });
+        });
+        await batch.commit();
+        e.target.value = '';
+        const warningText = problems.length
+          ? `\n\nRevisa estos productos (se importaron, pero no podrán cotizarse correctamente hasta completar sus datos):\n${problems.slice(0, 12).join('\n')}${problems.length > 12 ? `\n...y ${problems.length - 12} más` : ''}`
+          : '';
+        alert(`Importación terminada: ${rows.length} productos agregados/actualizados.\n\nEl sistema detectó automáticamente paquetes por caja, unidades por paquete, total de unidades, precio por paquete y costo unitario cuando los datos disponibles lo permitieron.${warningText}`);
+      } catch (error) {
+        alert('No se pudo importar el CSV: ' + error.message);
       }
-
-      await batch.commit();
-      e.target.value = '';
-      alert(`Se actualizaron ${count} productos sin alterar el resto de tu inventario.`);
     };
-    reader.readAsText(file);
+    reader.readAsText(file, 'UTF-8');
   };
 
   const exportToCSV = (filename, rows) => {
@@ -792,24 +830,25 @@ export default function App() {
     e.preventDefault();
     if (!isAdmin || !newProd.sku) return;
     const safeId = editingProductId || newProd.sku.trim().replace(/\//g, '_');
-    const cCaja = Number(newProd.costoCaja) || 0;
-    const pC = Number(newProd.pCaja) || 0;
-    const pPaq = Number(newProd.precioPaq) || (cCaja > 0 && pC > 0 ? Number((cCaja / pC).toFixed(2)) : 0);
+    const completed = completeProductData(newProd);
+    const cCaja = Number(completed.costoCaja) || 0;
+    const pC = Number(completed.pCaja) || 0;
+    const pPaq = Number(completed.precioPaq) || (cCaja > 0 && pC > 0 ? Number((cCaja / pC).toFixed(2)) : 0);
     const productData = {
-      ...newProd,
+      ...completed,
       sku: newProd.sku.trim(),
       descripcion: String(newProd.descripcion || '').trim(),
-      medida: String(newProd.medida || '').trim(),
-      material: String(newProd.material || '').trim(),
-      color: String(newProd.color || '').trim(),
-      coleccion: String(newProd.coleccion || '').trim(),
+      medida: String(completed.medida || '').trim(),
+      material: String(completed.material || '').trim(),
+      color: String(completed.color || '').trim(),
+      coleccion: String(completed.coleccion || '').trim(),
       stock: Number(newProd.stock) || 0,
       precioPaq: pPaq,
       costoCaja: cCaja,
-      costoUnidad: Number(newProd.costoUnidad) || 0,
-      uPq: Number(newProd.uPq) || 0,
+      costoUnidad: Number(completed.costoUnidad) || 0,
+      uPq: Number(completed.uPq) || 0,
       pCaja: pC,
-      totalProdCaja: Number(newProd.totalProdCaja) || 0,
+      totalProdCaja: Number(completed.totalProdCaja) || 0,
       cPalet: Number(newProd.cPalet) || 0,
       volumen: Number(newProd.volumen) || 0,
       peso: Number(newProd.peso) || 0,
@@ -1257,20 +1296,17 @@ export default function App() {
 
     let precioPiezaConImpresion = precioBasePieza;
     switch (impMode) {
-      // Modalidades porcentuales: se multiplica el precio base por servilleta.
       case '1tinta':
-        precioPiezaConImpresion = precioBasePieza * 1.25; // +25%
+        precioPiezaConImpresion = precioBasePieza * 1.25;
         break;
       case '2tintas':
-        precioPiezaConImpresion = precioBasePieza * 1.30; // +30%
+        precioPiezaConImpresion = precioBasePieza * 1.30;
         break;
-
-      // Modalidades México: se suma una cantidad fija en MXN por servilleta.
       case '1tintamx':
-        precioPiezaConImpresion = precioBasePieza + 0.70; // +$0.70 MXN
+        precioPiezaConImpresion = precioBasePieza + 0.70;
         break;
       case '2tintasmx':
-        precioPiezaConImpresion = precioBasePieza + 1.00; // +$1.00 MXN
+        precioPiezaConImpresion = precioBasePieza + 1.00;
         break;
       default:
         precioPiezaConImpresion = precioBasePieza;
